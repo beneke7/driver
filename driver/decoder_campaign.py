@@ -660,8 +660,21 @@ def _apply_trajectory_maneuver(
         raise ValueError("trajectory_alpha must be finite")
 
     parameters = dict(model.named_parameters())
-    past = {name: torch.zeros_like(parameter) for name, parameter in parameters.items()}
-    recent = {name: torch.zeros_like(parameter) for name, parameter in parameters.items()}
+    # Keep the reduction buffers on CPU: a full AdamW branch already owns model
+    # and moment tensors on the GPU, so two extra full-model GPU buffers are an
+    # avoidable peak-memory trap.
+    recent = {
+        name: torch.zeros_like(parameter, device="cpu", dtype=torch.float32)
+        for name, parameter in parameters.items()
+    }
+    past = (
+        {
+            name: torch.zeros_like(parameter, device="cpu", dtype=torch.float32)
+            for name, parameter in parameters.items()
+        }
+        if strategy == "trajectory_extrapolate"
+        else None
+    )
     snapshot_steps: list[int] = []
     for index, path in enumerate(snapshots):
         state, snapshot_step = _load_model_snapshot(
@@ -669,24 +682,30 @@ def _apply_trajectory_maneuver(
         )
         snapshot_steps.append(snapshot_step)
         target = past if index < window else recent
+        if target is None:
+            del state
+            continue
         for name, parameter in parameters.items():
             value = state.get(name)
             if value is None or value.shape != parameter.shape:
                 raise ValueError(f"trajectory snapshot is missing parameter {name}")
-            target[name].add_(value.to(device=parameter.device, dtype=parameter.dtype))
+            target[name].add_(value.to(dtype=torch.float32))
         del state
 
     energy = torch.zeros((), device=next(iter(parameters.values())).device, dtype=torch.float64)
     parameter_count = 0
     for name, parameter in parameters.items():
-        past[name].div_(window)
         recent[name].div_(window)
+        candidate_cpu = recent[name]
         if strategy == "trajectory_average":
-            candidate = recent[name]
+            pass
         else:
             # Deliberate ceiling: a two-window secant is cheaper than full PCA over
             # merged checkpoints; upgrade only if this leaves measurable signal.
-            candidate = recent[name] + alpha * (recent[name] - past[name])
+            past[name].div_(window)
+            candidate_cpu = recent[name].clone()
+            candidate_cpu.sub_(past[name]).mul_(alpha).add_(recent[name])
+        candidate = candidate_cpu.to(device=parameter.device, dtype=parameter.dtype)
         delta = candidate - parameter
         energy += delta.float().square().sum(dtype=torch.float64) / (
             parameter.float().square().sum(dtype=torch.float64) + 1e-12
