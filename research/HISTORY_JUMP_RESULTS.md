@@ -210,3 +210,10 @@ and `0.00867` on seeds 0 and 1, respectively. This is strong enough to
 promote window-2 shadow averaging as a baseline mechanism, but not enough to
 claim transfer until seed 2, changed data, and earlier cost-to-quality are
 measured.
+
+Seed 2 completed the same protocol with noop `0.84711`, shadow raw `0.84942`,
+and merged `0.83947`. Across seeds 0–2, matched noop-to-shadow endpoint
+improvements are `0.00753`, `0.00815`, and `0.00764`; the extra wall time was
+approximately four seconds per branch. This is now a reproducible same-data
+mechanism baseline. It still does not establish a training skip, and the
+TinyStories byte representation is a deliberately narrow transfer test.
