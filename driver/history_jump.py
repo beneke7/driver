@@ -358,16 +358,36 @@ def _optimizer_direction(
 
 @torch.no_grad()
 def _apply_momentum_jump(
-    model: nn.Module, optimizer: torch.optim.Optimizer, horizon: int, blend: float
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    horizon: int,
+    blend: float,
+    *,
+    advance_state: bool = False,
 ) -> float:
     if horizon <= 0 or not math.isfinite(blend) or blend <= 0.0:
         raise ValueError("jump horizon must be positive and blend must be finite and positive")
     directions = _optimizer_direction(model, optimizer)
     parameters = 0
     multiplier = horizon * blend
+    betas = {
+        parameter: tuple(float(value) for value in group.get("betas", (0.9, 0.999)))
+        for group in optimizer.param_groups
+        for parameter in group["params"]
+    }
     for parameter, lr, weight_decay, normalized in directions:
         parameter.add_(parameter, alpha=-lr * weight_decay * multiplier)
         parameter.add_(normalized, alpha=-lr * multiplier)
+        if advance_state:
+            state = optimizer.state[parameter]
+            beta1, beta2 = betas[parameter]
+            state["exp_avg"].mul_(beta1**horizon)
+            state["exp_avg_sq"].mul_(beta2**horizon)
+            step = state["step"]
+            if torch.is_tensor(step):
+                step.add_(horizon)
+            else:
+                state["step"] = step + horizon
         parameters += parameter.numel()
     if not directions:
         raise RuntimeError("optimizer has no initialized AdamW state")
@@ -422,8 +442,14 @@ def _run_action(
                 runtime={},
             )
         jump_flops = 0.0
-    elif action == "momentum_jump":
-        parameter_count = _apply_momentum_jump(model, optimizer, horizon, blend)
+    elif action in ("momentum_jump", "momentum_jump_decay"):
+        parameter_count = _apply_momentum_jump(
+            model,
+            optimizer,
+            horizon,
+            blend,
+            advance_state=action == "momentum_jump_decay",
+        )
         _advance_stream(stream, steps=horizon, target_config=target_config)
         jump_flops = 2.0 * parameter_count
     else:
@@ -477,7 +503,7 @@ def _run_action(
     wall_seconds = time.perf_counter() - started
     parameters = sum(parameter.numel() for parameter in model.parameters())
     consumed_tokens = 6 * batch_tokens * horizon
-    target_tokens = (5 if action == "momentum_jump" else 6) * batch_tokens * horizon
+    target_tokens = (5 if action != "noop" else 6) * batch_tokens * horizon
     evaluation_flops = 2.0 * parameters * batch_tokens * 3
     target_flops = 6.0 * parameters * target_tokens
     flops = target_flops + evaluation_flops + jump_flops
@@ -551,7 +577,11 @@ def jump_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             )
             parent_path = source / parent_row["checkpoint"]
             for horizon in horizons:
-                for action, blend_values in (("noop", (0.0,)), ("momentum_jump", blends)):
+                actions = tuple(args.action or ("momentum_jump",))
+                action_grid = (("noop", (0.0,)),) + tuple(
+                    (action, blends) for action in actions
+                )
+                for action, blend_values in action_grid:
                     for blend in blend_values:
                         try:
                             result = _run_action(
@@ -599,6 +629,7 @@ def jump_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         "torch": torch.__version__,
         "horizons": list(horizons),
         "blends": list(blends),
+        "actions": list(args.action or ("momentum_jump",)),
         "rows": len(rows),
         "failed": sum(1 for row in rows if row.get("failed")),
         "files": {"branches": "branches.jsonl"},
@@ -648,6 +679,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-small-target", action="store_true")
     parser.add_argument("--horizon", type=int, action="append")
     parser.add_argument("--blend", type=float, action="append")
+    parser.add_argument(
+        "--action", action="append", choices=("momentum_jump", "momentum_jump_decay")
+    )
     parser.add_argument("--max-parents", type=int)
     return parser
 

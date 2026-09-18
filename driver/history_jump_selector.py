@@ -162,7 +162,7 @@ def _load_examples(
             if noop is None or parent is None:
                 continue
             for row in rows:
-                if row["action"] != "momentum_jump":
+                if row["action"] == "noop":
                     continue
                 examples.append(
                     Example(

@@ -110,3 +110,14 @@ at zero. On the same seed-2 holdout, the permissive single model still selected
 ensemble selected none. This is the correct conservative behavior, but still
 not a useful steering result. More architecture is deferred until a
 controller can identify a positive safe action in held-out data.
+
+### Action-size and optimizer-state ablations
+
+On delayed-copy seed 2, reducing the original pulse to blend `0.125` or
+`0.25` did not produce a safe branch. Blend `0.25` was nearly neutral in final
+loss (`+0.00016`) but still had positive immediate and recovery deltas
+(`+0.0217` and `+0.00005`). An explicit `momentum_jump_decay` variant that also
+decayed AdamW moments and advanced the optimizer step through the skipped
+horizon was worse at the same blend: final `+0.00046`, recovery `+0.00173`.
+The optimizer-state rule is therefore not promoted; the variant remains in the
+archive as a causal negative control.
