@@ -107,6 +107,22 @@ It runs a common prefix, saves a complete parent checkpoint, restores matched
 validation loss. The pulse is a deliberately fixed control action; it is not
 yet a learned driver.
 
+The first full decoder development campaign is:
+
+```bash
+.venv/bin/python -m driver.decoder_campaign \
+  --output runs/decoder-development-33044e4
+```
+
+The default is an 85.35M-parameter decoder, three deterministic landscapes ×
+three seeds, and six same-budget policies: AdamW/noop, role pulse, open-loop
+schedule, shallow state controller, history retrieval, and online learning
+rate control. It writes a contract-v1 manifest, immutable parent checkpoints,
+`transitions.jsonl`, action-ranking/calibration data, and capability-cost
+curves. The completed development run produced 54/54 branch records with zero
+failures. It is calibration evidence, not the five-landscape promotion gate;
+see [research/DECODER_CAMPAIGN.md](research/DECODER_CAMPAIGN.md).
+
 Run it with:
 
 ```bash

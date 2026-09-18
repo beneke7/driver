@@ -44,9 +44,10 @@ primitive before any intervention result is considered causal.
 `driver/quadratic_benchmark.py` now supplies a contract-grade optimization
 track for five synthetic positive-definite families. The serial evaluator and
 `driver/contract.py` gate 15 held-out cases across three thresholds. The
-decoder loop still supplies the first target-model checkpoint branch for three
-local byte landscapes and only compares `noop` with a four-step fixed
-`role_pulse`; its controller and real corpus holdout remain future work.
+decoder campaign now supplies the first 85M-parameter target-model campaign
+for three local byte landscapes and three seeds. It compares six same-budget
+policies from immutable matched parents and writes ranking/calibration and
+capability-cost artifacts. Imagined branches remain disabled.
 
 An archive is valid only when parent transitions appear earlier in the same
 causal run, IDs are unique, and failed branches remain visible in the cost
@@ -63,13 +64,15 @@ whole-run accounting.
 
 ## First promotion checkpoint
 
-The first promotion gate passes on dimension-8, ill-conditioned positive-
+The first optimization promotion gate passes on dimension-8, ill-conditioned positive-
 definite landscapes: five families, three held-out seeds per family, and
 relative targets `1e-4`, `3e-5`, and `1e-5`. The primary serial wall-time
 geometric means are 26.36×, 29.52×, and 43.07×, with clustered 95% lower
 bounds above 22× at every target. This is a valid optimization-track result
-under the contract, not a general pretraining result. Dimension/data/model
-transfer and a learned decoder driver are the next promotion tests.
+under the contract, not a general pretraining result. The decoder development
+campaign is complete but does not pass or attempt the five-landscape
+promotion gate; its first ranking model has 11.1% top-1 agreement. The next
+tests are changed data/architecture transfer and a calibrated decoder driver.
 
 ## Known ceilings
 
