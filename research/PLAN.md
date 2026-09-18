@@ -41,8 +41,9 @@ Every branch must preserve or identify:
 `driver/checkpoints.py` now provides the matched-branch primitive, and its
 torch self-check verifies model, optimizer, CPU/CUDA RNG, and hash validation.
 `driver/branching.py` provides the dependency-free sibling ledger and a small
-state-conditioned online model. `driver/core.py` records target exceptions as
-failed terminal transitions, preserving observed wall time in the archive.
+state-conditioned online model. `driver/core.py` and the decoder branch
+wrapper record target exceptions as failed terminal transitions, preserving
+observed wall time in the archive.
 The quadratic mechanism benchmark still uses synthetic initial states rather
 than full target-model checkpoints; the decoder experiment must use this
 primitive before any intervention result is considered causal.
