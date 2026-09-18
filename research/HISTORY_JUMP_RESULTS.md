@@ -287,3 +287,22 @@ the window-2 average crossed its matched no-op endpoint only at global step
 endpoints were `1.46471`, `1.47994`, and `1.47746`. The endpoint merge is
 therefore a consistent quality improvement at fixed work, not yet a measured
 reduction in work to the same quality.
+
+### First learned dynamics model
+
+The first reusable driver component is an offline telemetry world model in
+[`driver/trajectory_world_model.py`](../driver/trajectory_world_model.py). It
+uses scale-free numerical features and compares a snapshot MLP with the same
+MLP given the latest eight telemetry vectors. The target is the next observed
+loss change; no action labels or imagined rollouts are used.
+
+On a whole-run holdout of FineWeb-Edu 139M seed 1, training on the other
+completed real runs gave next-loss RMSE `0.11757` for a train-mean baseline,
+`0.09430` for snapshot-only features, and `0.08916` for the eight-step history
+model. Correlations were `0.600` and `0.652`. A preliminary model trained only
+on synthetic decoder campaigns catastrophically extrapolated to real-model
+scales; log/relative normalization fixed that failure. This is the first
+evidence that short history contains predictive information beyond the current
+telemetry snapshot, and the first reason to test a small recurrent or
+history-attention driver. It remains a passive prediction result, not a
+steering or speedup result.
