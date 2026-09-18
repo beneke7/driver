@@ -275,7 +275,7 @@ def _observation(step: int, tokens: int, loss: float, flops: float) -> Observati
     return Observation(step=step, tokens=tokens, loss=loss, quality=-loss, compute_flops=flops)
 
 
-def _branch(
+def _branch_success(
     *,
     action: str,
     config: Config,
@@ -364,6 +364,66 @@ def _branch(
         "estimated_flops": flops,
         "target_tokens": target_tokens,
     }
+
+
+def _branch(**kwargs: Any) -> tuple[Transition, dict[str, Any]]:
+    """Run one branch while keeping failures visible in the archive.
+
+    A branch can fail after its parent checkpoint has been created (OOM,
+    divergence, timeout, or a restore problem).  The contract treats that as
+    measured evidence with consumed wall time, never as a missing row.
+    """
+
+    started = time.perf_counter()
+    try:
+        return _branch_success(**kwargs)
+    except Exception as exc:  # pragma: no cover - depends on torch/runtime faults
+        config: Config = kwargs["config"]
+        action: str = kwargs["action"]
+        parent: Checkpoint = kwargs["parent"]
+        before: Observation = kwargs["before"]
+        device: torch.device = kwargs["device"]
+        _sync(device)
+        wall_seconds = time.perf_counter() - started
+        detail = str(exc).strip().replace("\n", " ")[:400]
+        failure = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+        pulse = action == "role_pulse"
+        transition = Transition(
+            transition_id=f"{config.landscape}-{config.seed}:{action}",
+            run_id=f"{config.landscape}-{config.seed}",
+            parent_id=None,
+            before=before,
+            action=Action(action, strength=1.0 if pulse else 0.0),
+            after=None,
+            compute_flops=0.0,
+            wall_seconds=wall_seconds,
+            reward_task=0.0,
+            learning_progress=0.0,
+            accepted=False,
+            failure=failure,
+            metadata={
+                "failure_kind": "branch_exception",
+                "exception_type": type(exc).__name__,
+                "exception_message": detail,
+                "landscape": config.landscape,
+                "seed": config.seed,
+                "source_checkpoint_sha256": parent.sha256,
+                "config_sha256": kwargs["config_sha"],
+                "data_sha256": kwargs["data_sha"],
+                "code_sha": kwargs["code_sha"],
+                "failure_wall_seconds_observed": wall_seconds,
+            },
+        )
+        return transition, {
+            "action": action,
+            "immediate": None,
+            "recovery": None,
+            "final": None,
+            "wall_seconds": wall_seconds,
+            "estimated_flops": 0.0,
+            "target_tokens": 0,
+            "failure": failure,
+        }
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -455,6 +515,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         transitions.append(transition)
         results.append(result)
     archive.validate()
+    final_values = [result["final"] for result in results]
+    pulse_minus_noop_final = (
+        None
+        if any(value is None for value in final_values)
+        else final_values[1] - final_values[0]
+    )
     summary = {
         "config": asdict(config),
         "device": str(device),
@@ -466,7 +532,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "prefix_loss": prefix_loss,
         "prefix_seconds": prefix_seconds,
         "results": results,
-        "pulse_minus_noop_final": results[1]["final"] - results[0]["final"],
+        "pulse_minus_noop_final": pulse_minus_noop_final,
     }
     (output / "manifest.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary, indent=2))
