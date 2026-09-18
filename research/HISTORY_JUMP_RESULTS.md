@@ -165,3 +165,21 @@ next discriminating control is a cautious recovery schedule or an
 optimizer-state interpolation, not a larger steerer. The interrupted 139M
 late-prefix run is excluded because it never produced a complete parent and
 manifest.
+
+### Post-hoc trajectory rectification
+
+The same 85M late parent was continued once with ordinary AdamW for 2,048
+steps, saving eight continuation snapshots. Evaluating the raw endpoint gave
+`0.77263`; without any additional gradient step, averaging the most recent
+four snapshots gave `0.75750`, and two-window extrapolation with alpha `0.25`
+gave `0.75704`. Alpha `0.5` gave `0.76140`, while alpha `1.0` overshot to
+`0.78990`. The merge computation was about `1.37e9` estimated FLOPs, much less
+than the continuation, though its validation evaluation and storage must still
+be charged.
+
+This is a useful real-data landscape signal and a new baseline: maintain a
+shadow trajectory buffer and use a validated merged endpoint. It is not a
+training speedup yet. The next test is whether the same rectification reaches
+the raw endpoint's quality at an earlier checkpoint, and whether a driver can
+choose when to expose the merged shadow weights without damaging the live
+AdamW state.
