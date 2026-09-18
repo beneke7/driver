@@ -89,7 +89,9 @@ def make_stream(
             "the driver observes a training landscape and chooses a bounded "
             "intervention. measure recovery, cost, and transfer. "
         ).encode()
-        values = torch.tensor([byte % vocab_size for byte in text], dtype=torch.uint8)
+        offset = seed % len(text)
+        rotated = text[offset:] + text[:offset]
+        values = torch.tensor([byte % vocab_size for byte in rotated], dtype=torch.uint8)
         return values.repeat((length + len(values) - 1) // len(values))[:length]
     if landscape == "delayed_copy":
         values = torch.randint(0, vocab_size, (length,), generator=generator, dtype=torch.uint8)
