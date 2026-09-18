@@ -112,6 +112,22 @@ def make_stream(
     return values
 
 
+def make_byte_stream(path: str | Path, *, seed: int, length: int) -> torch.Tensor:
+    """Load a deterministic cyclic byte stream without a tokenizer dependency."""
+
+    if length <= 0:
+        raise ValueError("byte stream length must be positive")
+    raw = Path(path).read_bytes()
+    if not raw:
+        raise ValueError(f"byte stream is empty: {path}")
+    values = torch.tensor(list(raw), dtype=torch.uint8)
+    offset = seed % values.numel()
+    if offset:
+        values = torch.cat((values[offset:], values[:offset]))
+    repeats = (length + values.numel() - 1) // values.numel()
+    return values.repeat(repeats)[:length]
+
+
 class TokenStream:
     def __init__(self, values: torch.Tensor, *, cursor: int = 0):
         if values.ndim != 1 or values.dtype != torch.uint8:

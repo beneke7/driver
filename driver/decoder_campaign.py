@@ -36,6 +36,7 @@ from .decoder_benchmark import (
     _hash_tensor,
     _role,
     evaluate,
+    make_byte_stream,
     make_stream,
 )
 
@@ -65,6 +66,9 @@ class CampaignConfig:
     immediate_steps: int = 4
     recovery_steps: int = 32
     final_steps: int = 128
+    validation_batches: int = 8
+    train_file: str | None = None
+    validation_file: str | None = None
     learning_rate: float = 3e-4
     weight_decay: float = 0.1
     amp: bool = True
@@ -487,13 +491,20 @@ def _evaluate(
     campaign: CampaignConfig,
     device: torch.device,
 ) -> float:
-    chunk = values[: target_config.batch_size * (target_config.context + 1)].view(
-        target_config.batch_size, target_config.context + 1
-    )
-    tokens = chunk[:, :-1].to(device=device, dtype=torch.long)
-    targets = chunk[:, 1:].to(device=device, dtype=torch.long)
-    with torch.no_grad(), _autocast(campaign, device):
-        return _safe_float(model(tokens, targets).item())
+    width = target_config.batch_size * (target_config.context + 1)
+    required = width * campaign.validation_batches
+    if values.numel() < required:
+        raise ValueError("validation stream is shorter than validation_batches")
+    losses = []
+    for offset in range(0, required, width):
+        chunk = values[offset : offset + width].view(
+            target_config.batch_size, target_config.context + 1
+        )
+        tokens = chunk[:, :-1].to(device=device, dtype=torch.long)
+        targets = chunk[:, 1:].to(device=device, dtype=torch.long)
+        with torch.no_grad(), _autocast(campaign, device):
+            losses.append(_safe_float(model(tokens, targets).item()))
+    return sum(losses) / len(losses)
 
 
 def _train_prefix(
@@ -910,19 +921,33 @@ def _run_case(
     train_tokens = (
         campaign.prefix_steps + campaign.final_steps + 2
     ) * campaign.batch_size * (campaign.context + 1)
-    validation_tokens = campaign.batch_size * (campaign.context + 1)
-    train_values = make_stream(
-        landscape,
-        seed=seed,
-        length=train_tokens,
-        vocab_size=campaign.vocab_size,
+    validation_tokens = (
+        campaign.validation_batches * campaign.batch_size * (campaign.context + 1)
     )
-    validation_values = make_stream(
-        landscape,
-        seed=seed + 1_000_000,
-        length=validation_tokens,
-        vocab_size=campaign.vocab_size,
-    )
+    if campaign.train_file:
+        if campaign.vocab_size < 256:
+            raise ValueError("byte-corpus runs require vocab_size >= 256")
+        train_values = make_byte_stream(
+            campaign.train_file, seed=seed, length=train_tokens
+        )
+        validation_values = make_byte_stream(
+            campaign.validation_file or campaign.train_file,
+            seed=seed + 1_000_000,
+            length=validation_tokens,
+        )
+    else:
+        train_values = make_stream(
+            landscape,
+            seed=seed,
+            length=train_tokens,
+            vocab_size=campaign.vocab_size,
+        )
+        validation_values = make_stream(
+            landscape,
+            seed=seed + 1_000_000,
+            length=validation_tokens,
+            vocab_size=campaign.vocab_size,
+        )
     data_sha = _hash_bytes(
         _hash_tensor(train_values).encode() + _hash_tensor(validation_values).encode()
     )
@@ -1162,11 +1187,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         immediate_steps=args.immediate_steps,
         recovery_steps=args.recovery_steps,
         final_steps=args.final_steps,
+        validation_batches=args.validation_batches,
+        train_file=args.train_file,
+        validation_file=args.validation_file,
         learning_rate=args.learning_rate,
         amp=not args.no_amp,
     )
     if campaign.width % campaign.heads:
         raise ValueError("width must be divisible by heads")
+    if campaign.validation_batches <= 0:
+        raise ValueError("validation_batches must be positive")
     if not (
         0 < campaign.immediate_steps <= campaign.recovery_steps < campaign.final_steps
     ):
@@ -1350,6 +1380,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--immediate-steps", type=int, default=CampaignConfig.immediate_steps)
     parser.add_argument("--recovery-steps", type=int, default=CampaignConfig.recovery_steps)
     parser.add_argument("--final-steps", type=int, default=CampaignConfig.final_steps)
+    parser.add_argument(
+        "--validation-batches", type=int, default=CampaignConfig.validation_batches
+    )
+    parser.add_argument("--train-file")
+    parser.add_argument("--validation-file")
     parser.add_argument("--learning-rate", type=float, default=CampaignConfig.learning_rate)
     parser.add_argument("--no-amp", action="store_true")
     parser.add_argument("--allow-small-target", action="store_true")

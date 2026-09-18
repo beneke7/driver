@@ -1,0 +1,25 @@
+{
+  "schema": "landscape-driver.data-manifest.v1",
+  "dataset": "roneneldan/TinyStories",
+  "revision": "f54c09fd23315a6f9c86f9dc80f725e7d8f9c64",
+  "source": "https://huggingface.co/datasets/roneneldan/TinyStories",
+  "license_note": "Use the upstream dataset card and terms; this manifest does not change them.",
+  "representation": "raw UTF-8 bytes, vocabulary size 256",
+  "files": [
+    {
+      "local": "data/raw/TinyStories-train-prefix.txt",
+      "upstream": "TinyStories-train.txt",
+      "selection": "first 67108864 bytes via HTTP range request",
+      "bytes": 67108864,
+      "sha256": "1aa3e81618481ba1bd7eab1bd092232bcb3c42699f7c7ab011fe4b7488788d82"
+    },
+    {
+      "local": "data/raw/TinyStories-valid.txt",
+      "upstream": "TinyStories-valid.txt",
+      "selection": "complete file",
+      "bytes": 19447282,
+      "sha256": "94e431816c4cce81ff71e4408ff8d3bda9a42e8d2663986697c3954288cb38b4"
+    }
+  ],
+  "boundary": "The training prefix and validation file are byte streams for a controlled pilot, not a broad pretraining claim."
+}
