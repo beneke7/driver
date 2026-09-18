@@ -224,14 +224,26 @@ def _telemetry(
     update_sq = torch.zeros_like(grad_sq)
     alignment_dot = torch.zeros_like(grad_sq)
     momentum_sq = torch.zeros_like(grad_sq)
+    variance_sq = torch.zeros_like(grad_sq)
+    parameter_sq = torch.zeros_like(grad_sq)
     role_grad: dict[str, torch.Tensor] = {}
     role_update: dict[str, torch.Tensor] = {}
+    role_momentum: dict[str, torch.Tensor] = {}
+    role_variance: dict[str, torch.Tensor] = {}
+    role_parameter: dict[str, torch.Tensor] = {}
     for group in optimizer.param_groups:
         role = str(group["role"])
         role_grad[role] = torch.zeros_like(grad_sq)
         role_update[role] = torch.zeros_like(grad_sq)
+        role_momentum[role] = torch.zeros_like(grad_sq)
+        role_variance[role] = torch.zeros_like(grad_sq)
+        role_parameter[role] = torch.zeros_like(grad_sq)
         lr = float(group["lr"])
         for parameter in group["params"]:
+            parameter_value = parameter.detach().float()
+            parameter_value_sq = parameter_value.square().sum(dtype=torch.float64)
+            parameter_sq += parameter_value_sq
+            role_parameter[role] += parameter_value_sq
             if parameter.grad is None:
                 continue
             gradient = parameter.grad.detach().float()
@@ -245,6 +257,12 @@ def _telemetry(
                 continue
             momentum = momentum.detach().float()
             second = second.detach().float()
+            momentum_value_sq = momentum.square().sum(dtype=torch.float64)
+            variance_value_sq = second.square().sum(dtype=torch.float64)
+            momentum_sq += momentum_value_sq
+            variance_sq += variance_value_sq
+            role_momentum[role] += momentum_value_sq
+            role_variance[role] += variance_value_sq
             step_value = state.get("step", 1.0)
             step = float(step_value.item() if torch.is_tensor(step_value) else step_value)
             beta1, beta2 = 0.9, 0.999
@@ -256,7 +274,6 @@ def _telemetry(
             update_sq += update_value
             role_update[role] += update_value
             alignment_dot += (gradient * momentum).sum(dtype=torch.float64)
-            momentum_sq += momentum.square().sum(dtype=torch.float64)
     grad_norm = grad_sq.sqrt()
     update_norm = update_sq.sqrt()
     alignment = alignment_dot / (grad_sq.sqrt() * momentum_sq.sqrt()).clamp_min(1e-12)
@@ -265,11 +282,23 @@ def _telemetry(
         "gradient_norm": _safe_float(grad_norm.item()),
         "update_norm": _safe_float(update_norm.item()),
         "momentum_alignment": _safe_float(alignment.item()),
+        "parameter_norm": _safe_float(parameter_sq.sqrt().item()),
+        "adam_momentum_norm": _safe_float(momentum_sq.sqrt().item()),
+        "adam_variance_norm": _safe_float(variance_sq.sqrt().item()),
         "role_gradient_norms": {
             role: _safe_float(value.sqrt().item()) for role, value in role_grad.items()
         },
         "role_update_norms": {
             role: _safe_float(value.sqrt().item()) for role, value in role_update.items()
+        },
+        "role_parameter_norms": {
+            role: _safe_float(value.sqrt().item()) for role, value in role_parameter.items()
+        },
+        "adam_momentum_norms": {
+            role: _safe_float(value.sqrt().item()) for role, value in role_momentum.items()
+        },
+        "adam_variance_norms": {
+            role: _safe_float(value.sqrt().item()) for role, value in role_variance.items()
         },
     }
 
@@ -281,6 +310,9 @@ def _feature_vector(telemetry: dict[str, Any], loss_slope: float) -> dict[str, f
         "gradient_norm": float(telemetry["gradient_norm"]),
         "update_norm": float(telemetry["update_norm"]),
         "momentum_alignment": float(telemetry["momentum_alignment"]),
+        "parameter_norm": float(telemetry.get("parameter_norm", 0.0)),
+        "adam_momentum_norm": float(telemetry.get("adam_momentum_norm", 0.0)),
+        "adam_variance_norm": float(telemetry.get("adam_variance_norm", 0.0)),
     }
 
 

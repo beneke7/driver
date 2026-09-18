@@ -219,3 +219,8 @@ only per-step telemetry plus a compact AdamW update history.
 
 See [research/OPERATING_CONTRACT.md](research/OPERATING_CONTRACT.md) for the
 ongoing experiment, parallelism, accounting, and commit/push rules.
+
+The first screen is summarized in
+[research/HISTORY_JUMP_RESULTS.md](research/HISTORY_JUMP_RESULTS.md). It
+rejects a global momentum pulse and motivates a history-conditioned safe
+selector.
