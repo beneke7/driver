@@ -42,3 +42,28 @@ This is a mechanism screen, not a promotion result. It has only two seeds,
 three local landscapes, two parent checkpoints per seed, and no external data
 or architecture holdout. The full branch artifacts and exact commands remain
 ignored local files; do not report this screen as a general pretraining gain.
+
+## Selector screen: architecture is not the bottleneck yet
+
+The richer telemetry collection (`b20e69a`) was used to fit the first offline
+selector: a small MLP predicts the final loss delta for each jump and keeps
+`noop` available at zero predicted delta. The split was by complete cases, not
+individual rows. On the seed-1 holdout, the selector chose a jump for 20% of
+groups and produced a mean final delta of `+0.0117`; the matched no-op and the
+fixed-action baseline were both `0.0`, while the hindsight oracle was only
+`-0.00066`. On the text-shard landscape holdout it selected a jump for every
+group and produced `+0.1417`, with top-1 action accuracy `0.0833`.
+
+An initial risk gate calibrated to the 90th percentile training residual did
+not change either decision pattern. A manually wider `0.05` gate reduced the
+seed-1 jump rate to `13.3%` and the loss delta to `+0.0093`, but remained worse
+than no-op; it did nothing on the text holdout. This is a deliberate negative
+result: same-distribution residual calibration is not an uncertainty estimate
+under landscape shift.
+
+The next selector comparison is therefore retrieval or a small ensemble with
+case-level holdouts and an abstain-on-disagreement rule. A recurrent or
+Transformer steerer is deferred until that cheap control either shows a
+capacity-limited action-ranking error or the added telemetry makes a compact
+model underfit. Fresh seed-2 branch screens are being collected before that
+comparison.
