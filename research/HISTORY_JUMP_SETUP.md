@@ -116,10 +116,10 @@ data/README.md                    # local data and manifest rules
 data/trajectory/                  # ignored collected traces
 driver/checkpoints.py             # existing matched-branch primitive
 driver/core.py                    # existing archive and selector seam
-driver/trajectory_driver.py       # planned only after trace collection
+driver/history_jump.py            # trace collector and cheap jump benchmark
 runs/history-jump-*/              # ignored experiment artifacts
 ```
 
-The next code change should therefore be the smallest trace collector attached
-to the existing decoder loop. Do not create a general driver framework before
-one trace can be inspected and one matched jump branch can be audited.
+The trace collector and first momentum-jump control now exist in
+`driver/history_jump.py`. Do not create a general driver framework before the
+saved traces and matched branches show predictive signal worth modeling.

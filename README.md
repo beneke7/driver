@@ -198,6 +198,24 @@ risk checks. The setup is deliberately a contract, not a runnable driver yet:
 - [data/README.md](data/README.md) defines the local data layout. Raw data and
   trajectory artifacts stay ignored until they have a manifest and checksum.
 
+The first runnable bridge is `driver/history_jump.py`:
+
+```bash
+.venv/bin/python -m driver.history_jump --mode self-check
+.venv/bin/python -m driver.history_jump --mode collect --output runs/history-jump-traces
+.venv/bin/python -m driver.history_jump --mode benchmark \
+  --source runs/history-jump-traces --output runs/history-jump-results
+```
+
+Collection writes complete AdamW checkpoints at the configured cadence and
+per-step JSONL telemetry. Benchmarking starts after the first initialized
+AdamW state and compares matched `noop` branches with bounded momentum jumps.
+The default target is the existing 85M decoder; use `--allow-small-target` for
+fast smoke runs.
+
 No external repository or dataset is a runtime dependency yet. The first
 implementation should reuse the existing checkpoint/branch contract and add
 only per-step telemetry plus a compact AdamW update history.
+
+See [research/OPERATING_CONTRACT.md](research/OPERATING_CONTRACT.md) for the
+ongoing experiment, parallelism, accounting, and commit/push rules.
