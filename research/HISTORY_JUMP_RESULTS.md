@@ -193,3 +193,11 @@ the matched no-op at `0.84843`. The shadow branch took `257.56s` versus
 `253.32s` for no-op and added about `4.56e9` estimated FLOPs. This is the
 current strongest result, but it remains one seed, one byte-level corpus, and
 an endpoint-quality gain rather than a demonstrated skip.
+
+The window-2 progress curve did not yet show a cost-to-target win. At global
+steps `1024`, `1280`, `1536`, `1792`, `2048`, and `2304`, the shadow losses
+were `1.03294`, `0.98532`, `0.91146`, `0.89249`, `0.90203`, and `0.84090`;
+the matched noop endpoint was `0.84843`. Thus the shadow was better than raw
+at most late checkpoints and better than the final noop only at the endpoint.
+The next test extends the continuation to 4,096 steps so an earlier crossing
+can be measured rather than inferred.
