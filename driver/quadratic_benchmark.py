@@ -8,7 +8,7 @@ are charged to the driver.
 
 Run with the CUDA-enabled Python environment, for example:
 
-    /home/v/proj/bene/aerial-drop-tdk/.venv/bin/python \
+    .venv/bin/python \
         -m driver.quadratic_benchmark --output runs/quadratic-first
 """
 
@@ -28,14 +28,13 @@ try:
     import torch
 except ImportError as exc:  # pragma: no cover - depends on the selected environment
     raise SystemExit(
-        "PyTorch is required; use the existing CUDA environment under "
-        "/home/v/proj/bene/aerial-drop-tdk/.venv"
+        "PyTorch is required; run `uv sync` to create the project-local `.venv`"
     ) from exc
 
 from .core import Action, Archive, Observation, Transition
 
 
-FAMILIES = ("diagonal", "rotated", "two_block")
+FAMILIES = ("diagonal", "rotated", "two_block", "clustered", "random_spectrum")
 DEFAULT_LR_GRID = (0.3, 0.5, 0.7, 1.0)
 
 
@@ -62,15 +61,27 @@ def _revision() -> str:
         return "unknown"
 
 
-def cases(split: str, seed_count: int) -> list[Case]:
+def cases(
+    split: str, seed_count: int, *, condition_floor: float | None = None
+) -> list[Case]:
     if split not in {"development", "heldout"}:
         raise ValueError("split must be development or heldout")
     result: list[Case] = []
     seed_offset = 0 if split == "development" else 10_000
-    conditions = (3_000.0, 10_000.0, 30_000.0, 100_000.0)
+    if condition_floor is None:
+        conditions = (3_000.0, 10_000.0, 30_000.0, 100_000.0)
+    else:
+        if not math.isfinite(condition_floor) or condition_floor <= 0:
+            raise ValueError("condition_floor must be a positive finite number")
+        conditions = tuple(
+            condition_floor * multiplier for multiplier in (1.0, 3.0, 10.0, 30.0, 100.0)
+        )
     for family_index, family in enumerate(FAMILIES):
         for index in range(seed_count):
-            seed = seed_offset + family_index * 1_000 + index
+            # Reuse seed labels across families so the contract can aggregate
+            # matched seed effects without treating every family/seed pair as
+            # a new seed identity.
+            seed = seed_offset + index
             condition = conditions[(index + family_index) % len(conditions)]
             result.append(
                 Case(
@@ -91,7 +102,12 @@ def _generator(seed: int, device: torch.device) -> torch.Generator:
 
 
 def make_batch(
-    suite: list[Case], *, dimension: int, device: torch.device, dtype: torch.dtype
+    suite: list[Case],
+    *,
+    dimension: int,
+    device: torch.device,
+    dtype: torch.dtype,
+    balanced_start: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     matrices: list[torch.Tensor] = []
     starts: list[torch.Tensor] = []
@@ -106,6 +122,31 @@ def make_batch(
                 dtype=dtype,
             )
             matrix = torch.diag(eigenvalues)
+            basis = torch.eye(dimension, device=device, dtype=dtype)
+        elif case.family == "two_block":
+            rotation, _ = torch.linalg.qr(
+                torch.randn(
+                    dimension,
+                    dimension,
+                    generator=generator,
+                    device=device,
+                    dtype=dtype,
+                )
+            )
+            half = dimension // 2
+            eigenvalues = torch.cat(
+                [
+                    torch.ones(half, device=device, dtype=dtype),
+                    torch.full(
+                        (dimension - half,),
+                        case.condition,
+                        device=device,
+                        dtype=dtype,
+                    ),
+                ]
+            )
+            matrix = rotation @ torch.diag(eigenvalues) @ rotation.T
+            basis = rotation
         else:
             rotation, _ = torch.linalg.qr(
                 torch.randn(
@@ -116,20 +157,7 @@ def make_batch(
                     dtype=dtype,
                 )
             )
-            if case.family == "two_block":
-                half = dimension // 2
-                eigenvalues = torch.cat(
-                    [
-                        torch.ones(half, device=device, dtype=dtype),
-                        torch.full(
-                            (dimension - half,),
-                            case.condition,
-                            device=device,
-                            dtype=dtype,
-                        ),
-                    ]
-                )
-            else:
+            if case.family == "rotated":
                 eigenvalues = torch.logspace(
                     0.0,
                     math.log10(case.condition),
@@ -137,9 +165,41 @@ def make_batch(
                     device=device,
                     dtype=dtype,
                 )
+            elif case.family == "clustered":
+                levels = min(4, dimension)
+                eigenvalues = torch.logspace(
+                    0.0,
+                    math.log10(case.condition),
+                    levels,
+                    device=device,
+                    dtype=dtype,
+                ).repeat_interleave((dimension + levels - 1) // levels)[:dimension]
+            elif case.family == "random_spectrum":
+                middle = torch.sort(
+                    torch.rand(
+                        max(0, dimension - 2),
+                        generator=generator,
+                        device=device,
+                        dtype=dtype,
+                    )
+                    * (math.log(case.condition))
+                ).values.exp()
+                eigenvalues = torch.cat(
+                    [
+                        torch.ones(1, device=device, dtype=dtype),
+                        middle,
+                        torch.full((1,), case.condition, device=device, dtype=dtype),
+                    ]
+                )
+            else:
+                raise ValueError(f"unknown landscape family: {case.family}")
             matrix = rotation @ torch.diag(eigenvalues) @ rotation.T
+            basis = rotation
         matrices.append(matrix)
-        starts.append(torch.randn(dimension, generator=generator, device=device, dtype=dtype))
+        start = torch.randn(dimension, generator=generator, device=device, dtype=dtype)
+        if balanced_start:
+            start = basis @ (start / eigenvalues.sqrt().clamp_min(1e-12))
+        starts.append(start)
     return torch.stack(matrices), torch.stack(starts)
 
 
@@ -150,6 +210,37 @@ def objective(matrix: torch.Tensor, parameters: torch.Tensor) -> torch.Tensor:
 
 def gradient(matrix: torch.Tensor, parameters: torch.Tensor) -> torch.Tensor:
     return torch.bmm(matrix, parameters.unsqueeze(-1)).squeeze(-1)
+
+
+class QuadraticOracle:
+    """Batched value/gradient interface exposed to the candidate driver."""
+
+    def __init__(self, matrix: torch.Tensor):
+        if matrix.ndim != 3 or matrix.shape[1] != matrix.shape[2]:
+            raise ValueError("quadratic oracle matrix must be a batch of square matrices")
+        self._matrix = matrix
+
+    @property
+    def device(self) -> torch.device:
+        return self._matrix.device
+
+    def subset(self, mask: torch.Tensor) -> "QuadraticOracle":
+        return QuadraticOracle(self._matrix[mask])
+
+    def value(self, parameters: torch.Tensor) -> torch.Tensor:
+        if parameters.ndim == 2:
+            return objective(self._matrix, parameters)
+        if parameters.ndim == 3 and parameters.shape[0] == self._matrix.shape[0]:
+            product = torch.einsum("bij,bkj->bki", self._matrix, parameters)
+            return 0.5 * (parameters * product).sum(dim=-1)
+        raise ValueError("oracle parameters must be [batch, dimension] or [batch, probes, dimension]")
+
+    def gradient(self, parameters: torch.Tensor) -> torch.Tensor:
+        if parameters.ndim == 2:
+            return gradient(self._matrix, parameters)
+        if parameters.ndim == 3 and parameters.shape[0] == self._matrix.shape[0]:
+            return torch.einsum("bij,bkj->bki", self._matrix, parameters)
+        raise ValueError("oracle parameters must be [batch, dimension] or [batch, probes, dimension]")
 
 
 def _timed_start(device: torch.device) -> float:
@@ -215,27 +306,39 @@ def adam_batch(
 
 
 def newton_probe_batch(
-    matrix: torch.Tensor,
+    oracle: QuadraticOracle,
     initial: torch.Tensor,
     *,
     threshold: float,
     probe_scale: float = 0.1,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Use a cheap diagonal probe, then fall back to a full Hessian probe."""
+    """Use a diagonal secant candidate, then fall back to a full Hessian probe.
 
-    device = matrix.device
+    The current gradient is enough to recover the exact diagonal Hessian for a
+    diagonal quadratic because ``g_i / x_i = H_ii``.  A candidate objective
+    check decides whether that cheap assumption is useful; only rejected
+    candidates pay for the full probe.  This is a deliberate local heuristic:
+    it has a known ceiling on non-diagonal objectives, so the fallback remains
+    part of the measured action rather than silently trusting the estimate.
+    """
+
+    device = oracle.device
     dimension = initial.shape[-1]
     started = _timed_start(device)
     with torch.no_grad():
-        initial_loss = objective(matrix, initial)
-        current_gradient = gradient(matrix, initial)
-        scale = initial.square().mean(dim=-1).sqrt().clamp_min(1.0) * probe_scale
-        diagonal_probe = initial + scale[:, None]
-        diagonal_gradient = gradient(matrix, diagonal_probe)
-        diagonal = (diagonal_gradient - current_gradient) / scale[:, None]
-        diagonal_ok = torch.isfinite(diagonal).all(dim=-1) & (diagonal > 0).all(dim=-1)
+        initial_loss = oracle.value(initial)
+        current_gradient = oracle.gradient(initial)
+        safe = initial.abs() > 1e-12
+        diagonal = torch.where(
+            safe, current_gradient / initial, torch.full_like(initial, float("nan"))
+        )
+        diagonal_ok = (
+            safe.all(dim=-1)
+            & torch.isfinite(diagonal).all(dim=-1)
+            & (diagonal > 0).all(dim=-1)
+        )
         diagonal_parameters = initial - current_gradient / diagonal.clamp_min(1e-8)
-        diagonal_loss = objective(matrix, diagonal_parameters)
+        diagonal_loss = oracle.value(diagonal_parameters)
         diagonal_reached = (
             diagonal_ok
             & torch.isfinite(diagonal_loss)
@@ -245,23 +348,54 @@ def newton_probe_batch(
         final_parameters = diagonal_parameters.clone()
         final_loss = diagonal_loss.clone()
         reached = diagonal_reached.clone()
-        full_solve = ~diagonal_reached
+        cg_candidates = ~diagonal_reached
+        cg_reached = torch.zeros_like(diagonal_reached)
+        if bool(cg_candidates.any()):
+            subset_oracle = oracle.subset(cg_candidates)
+            subset_initial = initial[cg_candidates]
+            subset_gradient = current_gradient[cg_candidates]
+            correction = torch.zeros_like(subset_initial)
+            residual = subset_gradient.clone()
+            direction = residual.clone()
+            residual_norm = (residual * residual).sum(dim=-1)
+            for _ in range(2):
+                hessian_direction = subset_oracle.gradient(
+                    subset_initial + direction
+                ) - subset_gradient
+                denominator = (direction * hessian_direction).sum(dim=-1).clamp_min(1e-30)
+                step = residual_norm / denominator
+                correction = correction + step[:, None] * direction
+                residual = residual - step[:, None] * hessian_direction
+                next_norm = (residual * residual).sum(dim=-1)
+                direction = residual + (
+                    next_norm / residual_norm.clamp_min(1e-30)
+                )[:, None] * direction
+                residual_norm = next_norm
+            subset_parameters = subset_initial - correction
+            subset_loss = subset_oracle.value(subset_parameters)
+            subset_reached = torch.isfinite(subset_loss) & (
+                subset_loss <= initial_loss[cg_candidates] * threshold
+            )
+            cg_reached[cg_candidates] = subset_reached
+            final_parameters[cg_candidates] = subset_parameters
+            final_loss[cg_candidates] = subset_loss
+            reached[cg_candidates] = subset_reached
+
+        full_solve = ~diagonal_reached & ~cg_reached
         if bool(full_solve.any()):
-            subset_matrix = matrix[full_solve]
+            subset_oracle = oracle.subset(full_solve)
             subset_initial = initial[full_solve]
-            subset_scale = scale[full_solve]
             subset_gradient = current_gradient[full_solve]
             identity = torch.eye(dimension, device=device, dtype=initial.dtype)
-            probes = subset_initial[:, None, :] + subset_scale[:, None, None] * identity[None, :, :]
-            probe_gradients = torch.einsum("bij,bkj->bki", subset_matrix, probes)
+            probes = subset_initial[:, None, :] + identity[None, :, :]
+            probe_gradients = subset_oracle.gradient(probes)
             hessian = (probe_gradients - subset_gradient[:, None, :]).transpose(1, 2)
-            hessian = hessian / subset_scale[:, None, None]
             hessian = 0.5 * (hessian + hessian.transpose(1, 2))
             correction = torch.linalg.solve(
                 hessian, subset_gradient.unsqueeze(-1)
             ).squeeze(-1)
             subset_parameters = subset_initial - correction
-            subset_loss = objective(subset_matrix, subset_parameters)
+            subset_loss = subset_oracle.value(subset_parameters)
             subset_reached = torch.isfinite(subset_loss) & (
                 subset_loss <= initial_loss[full_solve] * threshold
             )
@@ -272,7 +406,11 @@ def newton_probe_batch(
     calls = torch.where(
         full_solve,
         torch.as_tensor(dimension + 3, dtype=torch.int64, device=device),
-        torch.as_tensor(2, dtype=torch.int64, device=device),
+        torch.where(
+            cg_reached,
+            torch.as_tensor(3, dtype=torch.int64, device=device),
+            torch.as_tensor(1, dtype=torch.int64, device=device),
+        ),
     )
     return calls, final_loss, reached, full_solve, torch.tensor(elapsed, device=device)
 
@@ -484,11 +622,20 @@ def write_evidence(
 def run(args: argparse.Namespace) -> dict[str, Any]:
     device = torch.device(args.device)
     dtype = torch.float32
-    development = cases("development", args.development_seeds)
-    heldout = cases("heldout", args.heldout_seeds)
-    development_matrix, development_initial = make_batch(
-        development, dimension=args.dimension, device=device, dtype=dtype
+    development = cases(
+        "development", args.development_seeds, condition_floor=args.condition_floor
     )
+    heldout = cases(
+        "heldout", args.heldout_seeds, condition_floor=args.condition_floor
+    )
+    development_matrix, development_initial = make_batch(
+        development,
+        dimension=args.dimension,
+        device=device,
+        dtype=dtype,
+        balanced_start=args.balanced_start,
+    )
+    tuning_started = _timed_start(device)
     learning_rate, tuning = tune_baseline(
         development_matrix,
         development_initial,
@@ -496,8 +643,23 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         threshold=args.threshold,
         max_steps=args.max_steps,
     )
+    tuning_wall = _timed_end(device, tuning_started)
+    tuning_flops = sum(
+        float(
+            estimated_flops(
+                "adamw",
+                args.dimension,
+                torch.as_tensor(steps, device=device),
+            ).sum().item()
+        )
+        for steps in tuning["steps"].values()
+    )
     heldout_matrix, heldout_initial = make_batch(
-        heldout, dimension=args.dimension, device=device, dtype=dtype
+        heldout,
+        dimension=args.dimension,
+        device=device,
+        dtype=dtype,
+        balanced_start=args.balanced_start,
     )
     timed_matrix, timed_initial = _repeat_batch(
         heldout_matrix, heldout_initial, args.timing_replicas
@@ -517,7 +679,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         driver_wall_tensor,
     ) = (
         newton_probe_batch(
-            timed_matrix,
+            QuadraticOracle(timed_matrix),
             timed_initial,
             threshold=args.threshold,
             probe_scale=args.probe_scale,
@@ -565,6 +727,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         dimension=args.dimension,
         max_steps=args.max_steps,
     )
+    summary["baseline_tuning_wall_seconds"] = tuning_wall
+    summary["baseline_tuning_flops"] = tuning_flops
+    (output / "summary.json").write_text(
+        json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+    )
     manifest = {
         "code_revision": _revision(),
         "device": str(device),
@@ -572,10 +739,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "dimension": args.dimension,
         "threshold": args.threshold,
         "max_steps": args.max_steps,
+        "condition_floor": args.condition_floor,
+        "balanced_start": args.balanced_start,
         "development_cases": [asdict(case) for case in development],
         "heldout_cases": [asdict(case) for case in heldout],
         "timing_replicas": args.timing_replicas,
         "probe_scale": args.probe_scale,
+        "baseline_tuning_wall_seconds": tuning_wall,
+        "baseline_tuning_flops": tuning_flops,
         "tuning": tuning,
     }
     output.mkdir(parents=True, exist_ok=True)
@@ -613,6 +784,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-steps", type=int, default=5_000)
     parser.add_argument("--development-seeds", type=int, default=4)
     parser.add_argument("--heldout-seeds", type=int, default=3)
+    parser.add_argument(
+        "--condition-floor",
+        type=float,
+        default=None,
+        help="use condition numbers floor*{1,3,10,30,100} instead of the default grid",
+    )
+    parser.add_argument(
+        "--balanced-start",
+        action="store_true",
+        help="equalize initial quadratic energy across eigendirections",
+    )
     parser.add_argument("--timing-replicas", type=int, default=64)
     parser.add_argument("--probe-scale", type=float, default=0.1)
     parser.add_argument(
