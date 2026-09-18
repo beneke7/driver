@@ -403,6 +403,42 @@ def _advance_stream(stream: TokenStream, *, steps: int, target_config: Config) -
     return consumed
 
 
+@torch.no_grad()
+def _apply_secant_jump(
+    model: nn.Module,
+    previous: Path,
+    *,
+    horizon: int,
+    blend: float,
+    checkpoint_gap: int,
+    config_sha: str,
+    data_sha: str,
+) -> float:
+    if checkpoint_gap <= 0:
+        raise ValueError("checkpoint gap must be positive")
+    if horizon <= 0 or not math.isfinite(blend) or blend <= 0.0:
+        raise ValueError("jump horizon must be positive and blend must be finite and positive")
+    payload = torch.load(previous, map_location="cpu", weights_only=False)
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ValueError("previous checkpoint is missing metadata")
+    if metadata.get("config_sha256") != config_sha or metadata.get("data_sha256") != data_sha:
+        raise ValueError("previous checkpoint provenance mismatch")
+    previous_state = payload.get("model")
+    if not isinstance(previous_state, dict):
+        raise ValueError("previous checkpoint is missing model state")
+    multiplier = blend * horizon / checkpoint_gap
+    parameters = 0
+    for name, parameter in model.named_parameters():
+        old = previous_state.get(name)
+        if old is None or old.shape != parameter.shape:
+            raise ValueError(f"previous checkpoint is missing parameter {name}")
+        delta = parameter - old.to(device=parameter.device, dtype=parameter.dtype)
+        parameter.add_(delta, alpha=multiplier)
+        parameters += parameter.numel()
+    return float(parameters)
+
+
 def _run_action(
     *,
     action: str,
@@ -416,6 +452,8 @@ def _run_action(
     config_sha: str,
     data_sha: str,
     device: torch.device,
+    previous: Path | None = None,
+    checkpoint_gap: int = 1,
 ) -> dict[str, Any]:
     model, optimizer = _model_and_optimizer(target_config, device)
     started = time.perf_counter()
@@ -449,6 +487,20 @@ def _run_action(
             horizon,
             blend,
             advance_state=action == "momentum_jump_decay",
+        )
+        _advance_stream(stream, steps=horizon, target_config=target_config)
+        jump_flops = 2.0 * parameter_count
+    elif action == "secant_jump":
+        if previous is None:
+            raise ValueError("secant jump requires a previous checkpoint")
+        parameter_count = _apply_secant_jump(
+            model,
+            previous,
+            horizon=horizon,
+            blend=blend,
+            checkpoint_gap=checkpoint_gap,
+            config_sha=config_sha,
+            data_sha=data_sha,
         )
         _advance_stream(stream, steps=horizon, target_config=target_config)
         jump_flops = 2.0 * parameter_count
@@ -559,11 +611,18 @@ def jump_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         ]
         # The first checkpoint has no initialized AdamW moments. Keep it in the
         # trace for provenance, but begin jump comparisons after one update.
-        parents = [
+        checkpoints = [
             row
             for row in trace_rows
-            if row.get("checkpoint") and int(row["step"]) > 0
+            if row.get("checkpoint")
         ]
+        previous_by_checkpoint = {
+            current["checkpoint"]: previous["checkpoint"]
+            for previous, current in zip(checkpoints, checkpoints[1:])
+        }
+        # The first checkpoint has no initialized AdamW moments. Keep it as
+        # secant history, but begin action comparisons after one update.
+        parents = checkpoints[1:]
         if max_parents is not None:
             parents = parents[:max_parents]
         for parent_row in parents:
@@ -596,6 +655,12 @@ def jump_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                                 config_sha=case["config_sha256"],
                                 data_sha=data_sha,
                                 device=device,
+                                previous=(
+                                    source / previous_by_checkpoint[parent_row["checkpoint"]]
+                                    if action == "secant_jump"
+                                    else None
+                                ),
+                                checkpoint_gap=config.checkpoint_every,
                             )
                         except Exception as exc:
                             result = {
@@ -680,7 +745,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--horizon", type=int, action="append")
     parser.add_argument("--blend", type=float, action="append")
     parser.add_argument(
-        "--action", action="append", choices=("momentum_jump", "momentum_jump_decay")
+        "--action",
+        action="append",
+        choices=("momentum_jump", "momentum_jump_decay", "secant_jump"),
     )
     parser.add_argument("--max-parents", type=int)
     return parser
