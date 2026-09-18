@@ -59,7 +59,8 @@ TRAJECTORY_STRATEGIES = (
     "trajectory_average_reset",
     "trajectory_extrapolate_reset",
 )
-ALL_STRATEGIES = STRATEGIES + TRAJECTORY_STRATEGIES
+SHADOW_STRATEGIES = ("trajectory_shadow_average",)
+ALL_STRATEGIES = STRATEGIES + TRAJECTORY_STRATEGIES + SHADOW_STRATEGIES
 QUALITY_FACTORS = (0.995, 0.99, 0.98)
 
 
@@ -399,6 +400,7 @@ def _proposals(
         "trajectory_extrapolate": "trajectory_extrapolate",
         "trajectory_average_reset": "trajectory_average_reset",
         "trajectory_extrapolate_reset": "trajectory_extrapolate_reset",
+        "trajectory_shadow_average": "noop",
     }
     shallow_score = (
         -parent_features["loss_slope"]
@@ -761,6 +763,7 @@ def _branch(
     before: Observation,
     device: torch.device,
     trajectory_snapshots: tuple[Path, ...] = (),
+    branch_output: Path | None = None,
 ) -> tuple[Transition, dict[str, Any]]:
     model: DecoderLM | None = None
     optimizer: torch.optim.Optimizer | None = None
@@ -786,6 +789,22 @@ def _branch(
         runtime: dict[str, Any] = {"lr_multiplier": 1.0, "adapter_updates": 0}
         maneuver: dict[str, Any] | None = None
         intervention_loss: float | None = None
+        shadow_raw_final_loss: float | None = None
+        shadow_snapshots: list[Path] = []
+        shadow_snapshot_steps: set[int] = set()
+        if proposal.strategy in SHADOW_STRATEGIES:
+            if branch_output is None:
+                raise ValueError("shadow strategy requires a branch output directory")
+            if campaign.trajectory_interval <= 0:
+                raise ValueError("trajectory_interval must be positive")
+            shadow_snapshot_steps = set(
+                range(
+                    campaign.trajectory_interval,
+                    campaign.final_steps + 1,
+                    campaign.trajectory_interval,
+                )
+            )
+            shadow_snapshot_steps.add(campaign.final_steps)
         if proposal.strategy in TRAJECTORY_STRATEGIES:
             maneuver = _apply_trajectory_maneuver(
                 model,
@@ -843,6 +862,21 @@ def _branch(
                 )
                 telemetry.append(current)
                 consumed_tokens += consumed
+                branch_step = step + 1
+                if branch_step in shadow_snapshot_steps:
+                    snapshot_path = (
+                        branch_output
+                        / "trajectory"
+                        / f"step-{target_config.prefix_steps + branch_step:06d}.pt"
+                    )
+                    _save_model_snapshot(
+                        snapshot_path,
+                        model=model,
+                        step=target_config.prefix_steps + branch_step,
+                        config_sha=config_sha,
+                        data_sha=data_sha,
+                    )
+                    shadow_snapshots.append(snapshot_path)
             immediate_loss: float | None = None
             if proposal.strategy == "online_lr_control" and phase_index == 0:
                 immediate_loss = _evaluate(
@@ -877,6 +911,32 @@ def _branch(
             )
             previous = boundary
         final_loss = phase_metrics[-1]["loss"]
+        if proposal.strategy in SHADOW_STRATEGIES:
+            required_snapshots = 2 * campaign.trajectory_window
+            if len(shadow_snapshots) < required_snapshots:
+                raise ValueError(
+                    "shadow strategy needs at least two complete trajectory windows"
+                )
+            shadow_raw_final_loss = final_loss
+            maneuver = _apply_trajectory_maneuver(
+                model,
+                strategy="trajectory_average",
+                snapshots=tuple(shadow_snapshots[-required_snapshots:]),
+                window=campaign.trajectory_window,
+                alpha=0.0,
+                config_sha=config_sha,
+                data_sha=data_sha,
+            )
+            maneuver["kind"] = proposal.strategy
+            final_loss = _evaluate(
+                model,
+                validation_values,
+                target_config=target_config,
+                campaign=campaign,
+                device=device,
+            )
+            phase_metrics[-1]["raw_loss"] = shadow_raw_final_loss
+            phase_metrics[-1]["loss"] = final_loss
         target_tokens = consumed_tokens
         target_flops = _flops(
             target_config,
@@ -886,7 +946,7 @@ def _branch(
         )
         parameter_count = sum(parameter.numel() for parameter in model.parameters())
         evaluation_flops = 2.0 * parameter_count * target_config.batch_size * target_config.context * (
-            3 + int(intervention_loss is not None)
+            3 + int(intervention_loss is not None) + int(shadow_raw_final_loss is not None)
         )
         driver_inference_flops = 64.0
         driver_update_flops = 1.0 if proposal.strategy == "online_lr_control" else 0.0
@@ -922,6 +982,7 @@ def _branch(
             "trajectory_extrapolate": 5.0,
             "trajectory_average_reset": 6.0,
             "trajectory_extrapolate_reset": 7.0,
+            "trajectory_shadow_average": 8.0,
         }
         transition = Transition(
             transition_id=f"{target_config.landscape}-{target_config.seed}:{proposal.strategy}",
@@ -959,6 +1020,8 @@ def _branch(
                 },
                 "maneuver": maneuver,
                 "intervention_loss": intervention_loss,
+                "shadow_raw_final_loss": shadow_raw_final_loss,
+                "shadow_snapshots": [str(path) for path in shadow_snapshots],
                 "horizon_metrics": phase_metrics,
                 "telemetry": telemetry,
                 "target_tokens": target_tokens,
@@ -992,6 +1055,7 @@ def _branch(
             "final_loss": final_loss,
             "gain": parent_loss - final_loss,
             "intervention_loss": intervention_loss,
+            "shadow_raw_final_loss": shadow_raw_final_loss,
             "maneuver": maneuver,
             "wall_seconds": wall_seconds,
             "target_flops": target_flops,
@@ -1282,6 +1346,7 @@ def _run_case(
             before=before,
             device=device,
             trajectory_snapshots=tuple(trajectory_snapshots),
+            branch_output=case_output / "branches" / proposal.strategy,
         )
         archive.append(transition)
         branch_results.append(result)

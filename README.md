@@ -139,6 +139,11 @@ python3 -m driver.decoder_campaign \
 Use a versioned real-data stream and a 70–160M target for an interpretable
 long-run result; the tiny synthetic command above is only a plumbing check.
 
+For the safer endpoint-only control, use `trajectory_shadow_average`. It keeps
+the live AdamW trajectory unchanged, saves continuation snapshots, and reports
+the merged shadow endpoint separately from the raw endpoint. This is the
+current post-hoc rectification baseline, not an online jump.
+
 Run it with:
 
 ```bash

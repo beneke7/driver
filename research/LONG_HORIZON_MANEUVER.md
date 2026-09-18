@@ -63,6 +63,8 @@ data interval. Keep the action set small:
 - `trajectory_average_reset` and `trajectory_extrapolate_reset`: the same
   moves with Adam first moments and second moments zeroed, isolating optimizer
   state inconsistency;
+- `trajectory_shadow_average`: continue ordinary AdamW, then expose a merged
+  shadow endpoint without changing the live optimizer state;
 - `recovery`: damping, clipping, or optimizer-state correction applied only
   under a declared failure rule.
 
