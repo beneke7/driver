@@ -70,6 +70,21 @@ The matched-checkpoint boundary is independently checked with:
 .venv/bin/python -m driver.torch_self_check
 ```
 
+The dependency-free Dream-style branch seam is checked with:
+
+```bash
+python3 -m driver.branching_self_check
+```
+
+`driver/branching.py` keeps matched sibling provenance explicit and separates
+`real`, `replay`, and `imagined` branches. Its small feature/action model is
+an online control, not the proposed deep meta-brain: it tests whether
+telemetry geometry carries signal before paying for a neural world model.
+Replay requires a recorded real transition, and imagined proposals remain
+disabled until recent real-branch prediction errors pass a calibration gate.
+A target exception is archived as a terminal failed transition so an OOM,
+divergence, timeout, or bad restore cannot disappear from accounting.
+
 The contract evaluator and serial timing path are:
 
 ```bash
