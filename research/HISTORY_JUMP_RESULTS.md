@@ -264,3 +264,18 @@ were also the best fixed window: losses for windows 1/2/3/4 were
 therefore be reduced to no-op, window-2 shadow average, and a deliberately
 bounded small extrapolation control; larger pulses have a clear, measurable
 ceiling on this data.
+
+The width holdout used the same FineWeb-Edu slice and protocol with an
+85M-parameter decoder. All three seeds completed with zero branch failures:
+
+| Seed | No-op final | Shadow raw | Shadow merged | Endpoint improvement | Branch wall (noop/shadow) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0 | `1.46471` | `1.46657` | `1.44702` | `0.01769` | `175.69s / 178.41s` |
+| 1 | `1.47994` | `1.47986` | `1.45824` | `0.02170` | `176.59s / 178.48s` |
+| 2 | `1.47746` | `1.47947` | `1.45765` | `0.01981` | `176.61s / 178.61s` |
+
+The mean endpoint improvement is `0.01973` at 85M versus `0.02404` across
+the two completed 139M FineWeb-Edu seeds. This supports a width-robust
+endpoint rectification mechanism, not a claim that overparameterization causes
+the effect. Both widths still consume the same continuation tokens; the next
+step is a learned timing/acceptance gate and an explicit cost-to-target test.
