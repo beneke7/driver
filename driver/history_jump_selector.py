@@ -1,9 +1,9 @@
 """Train a small supervised selector over recorded history-jump branches.
 
 The selector is deliberately offline and conservative: it predicts the final
-loss delta of a candidate jump, while ``noop`` is always available at zero
-delta. This tests whether the saved telemetry contains regime information
-before introducing online learning or imagined rollouts.
+worst-horizon loss delta of a candidate jump, while ``noop`` is always
+available at zero delta. This tests whether the saved telemetry contains
+regime information before introducing online learning or imagined rollouts.
 """
 
 from __future__ import annotations
@@ -56,6 +56,10 @@ class Example:
     final_delta: float
     immediate_delta: float
     recovery_delta: float
+
+    @property
+    def safe_delta(self) -> float:
+        return max(self.immediate_delta, self.recovery_delta, self.final_delta)
 
 
 class Predictor(nn.Module):
@@ -268,7 +272,7 @@ def _selector_report(
         groups[_group_key(item["example"])].append(item)
     train_action_mean: dict[tuple[int, float], float] = defaultdict(list)
     for example in train_examples:
-        train_action_mean[(example.horizon, example.blend)].append(example.final_delta)
+        train_action_mean[(example.horizon, example.blend)].append(example.safe_delta)
     fixed_scores = {
         key: sum(values) / len(values) for key, values in train_action_mean.items()
     }
@@ -276,6 +280,9 @@ def _selector_report(
     fixed: list[float] = []
     oracle: list[float] = []
     noop: list[float] = []
+    selected_safe: list[float] = []
+    fixed_safe: list[float] = []
+    oracle_safe: list[float] = []
     selected_jump = 0
     top1 = 0
     for candidates in groups.values():
@@ -283,9 +290,11 @@ def _selector_report(
         chosen_prediction = min(0.0, predicted["decision"])
         if chosen_prediction < -risk_radius:
             selected.append(predicted["example"].final_delta)
+            selected_safe.append(predicted["example"].safe_delta)
             selected_jump += 1
         else:
             selected.append(0.0)
+            selected_safe.append(0.0)
         fixed_action = min(
             candidates,
             key=lambda item: fixed_scores.get(
@@ -296,24 +305,34 @@ def _selector_report(
             (fixed_action["example"].horizon, fixed_action["example"].blend), math.inf
         )
         fixed.append(fixed_action["example"].final_delta if fixed_score < 0.0 else 0.0)
+        fixed_safe.append(
+            fixed_action["example"].safe_delta if fixed_score < 0.0 else 0.0
+        )
         oracle.append(min(0.0, *(item["example"].final_delta for item in candidates)))
+        oracle_safe.append(
+            min(0.0, *(item["example"].safe_delta for item in candidates))
+        )
         noop.append(0.0)
         actual_best = min(
-            0.0, *(item["example"].final_delta for item in candidates)
+            0.0, *(item["example"].safe_delta for item in candidates)
         )
-        selected_actual = selected[-1]
+        selected_actual = selected_safe[-1]
         if math.isclose(selected_actual, actual_best, rel_tol=0.0, abs_tol=1e-6):
             top1 += 1
     errors = [
-        item["prediction"] - item["example"].final_delta for item in indexed
+        item["prediction"] - item["example"].safe_delta for item in indexed
     ]
     return {
+        "target": "safe_delta",
         "groups": len(groups),
         "jump_examples": len(examples),
         "prediction_rmse": math.sqrt(sum(error * error for error in errors) / len(errors)),
         "selected_mean_final_delta": sum(selected) / len(selected),
         "fixed_mean_final_delta": sum(fixed) / len(fixed),
         "oracle_mean_final_delta": sum(oracle) / len(oracle),
+        "selected_mean_safe_delta": sum(selected_safe) / len(selected_safe),
+        "fixed_mean_safe_delta": sum(fixed_safe) / len(fixed_safe),
+        "oracle_mean_safe_delta": sum(oracle_safe) / len(oracle_safe),
         "noop_mean_final_delta": sum(noop) / len(noop),
         "selected_jump_rate": selected_jump / len(selected),
         "selected_top1_rate": top1 / len(selected),
@@ -429,10 +448,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         _matrix(train_examples, names), _matrix(test_examples, names)
     )
     train_targets = torch.tensor(
-        [example.final_delta for example in train_examples], dtype=torch.float32
+        [example.safe_delta for example in train_examples], dtype=torch.float32
     )
     test_targets = torch.tensor(
-        [example.final_delta for example in test_examples], dtype=torch.float32
+        [example.safe_delta for example in test_examples], dtype=torch.float32
     )
     support_calibration, support_distances = _support_distances(
         train_examples, test_examples, names
@@ -485,7 +504,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     decision_predictions = decision_predictions.clone()
     decision_predictions[support_distances > support_radius] = float("inf")
     report = {
-        "schema": "landscape-driver.history-jump-selector.v1",
+        "schema": "landscape-driver.history-jump-selector.v2",
+        "target": "safe_delta",
         "results": args.results,
         "holdout_landscapes": sorted(holdout_landscapes),
         "holdout_seeds": sorted(holdout_seeds),

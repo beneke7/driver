@@ -46,7 +46,7 @@ ignored local files; do not report this screen as a general pretraining gain.
 ## Selector screen: architecture is not the bottleneck yet
 
 The richer telemetry collection (`b20e69a`) was used to fit the first offline
-selector: a small MLP predicts the final loss delta for each jump and keeps
+selector (v1): a small MLP predicts the final loss delta for each jump and keeps
 `noop` available at zero predicted delta. The split was by complete cases, not
 individual rows. On the seed-1 holdout, the selector chose a jump for 20% of
 groups and produced a mean final delta of `+0.0117`; the matched no-op and the
@@ -77,3 +77,36 @@ nearest-neighbor support gate fixed that failure, rejecting all text cases;
 its default 95th-percentile support radius also rejected the delayed seed-2
 case. Widening the radius to `12` admitted delayed seed 2 but still selected
 no jumps. This is useful safety machinery, not evidence of a steering gain.
+
+## Fresh seed-2 causal holdout
+
+The same 85M AdamW harness was extended to four parent checkpoints per seed
+for the third seed: 36 branches per landscape, 108 branches total, all
+successful. Relative to matched no-op branches, the mean final-loss deltas
+were:
+
+| Landscape | Blend 0.5 | Blend 1.0 | Immediate/recovery warning |
+| --- | ---: | ---: | --- |
+| delayed copy | `-0.00044` | `-0.00121` | immediate `+0.142/+0.379`; recovery `+0.004/+0.012` |
+| phase switch | `+0.137` | `+0.206` | immediate is lower, but recovery/final lose |
+| text shard | `+0.109` | `+0.155` | immediate `+1.285/+2.402`; recovery `+0.463/+0.581` |
+
+The jump FLOP ratio was about `0.835×` and the wall ratio about `0.84–0.90×`,
+but this is not a speedup claim because the jump still paid for recovery and
+final evaluation. Every tested jump had a positive maximum over immediate,
+recovery, and final deltas. A final-only objective would therefore reward a
+transiently attractive but operationally unsafe action.
+
+Training on seeds 0/1 and holding out all seed-2 cases produced 72 test jump
+examples. With support disabled, the single MLP selected 16.7% of groups and
+caused `+0.0167` mean final-loss damage. The five-model case-bootstrap
+ensemble abstained on all groups; the default leave-one-case-out support gate
+also abstained on all groups.
+
+Selector v2 now trains on
+`safe_delta = max(immediate_delta, recovery_delta, final_delta)`, with `noop`
+at zero. On the same seed-2 holdout, the permissive single model still selected
+16.7% of groups, with `+0.0202` mean selected safe delta; the support-gated
+ensemble selected none. This is the correct conservative behavior, but still
+not a useful steering result. More architecture is deferred until a
+controller can identify a positive safe action in held-out data.
