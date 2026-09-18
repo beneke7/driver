@@ -199,8 +199,8 @@ steps `1024`, `1280`, `1536`, `1792`, `2048`, and `2304`, the shadow losses
 were `1.03294`, `0.98532`, `0.91146`, `0.89249`, `0.90203`, and `0.84090`;
 the matched noop endpoint was `0.84843`. Thus the shadow was better than raw
 at most late checkpoints and better than the final noop only at the endpoint.
-The next test extends the continuation to 4,096 steps so an earlier crossing
-can be measured rather than inferred.
+That rules out calling this a skip until an earlier merged checkpoint reaches
+a matched target on an independent continuation.
 
 A fresh 139M seed-1 replication with the same window-2 protocol also passed:
 noop ended at `0.85290`, the shadow branch's raw endpoint was `0.85342`, and
@@ -217,3 +217,37 @@ improvements are `0.00753`, `0.00815`, and `0.00764`; the extra wall time was
 approximately four seconds per branch. This is now a reproducible same-data
 mechanism baseline. It still does not establish a training skip, and the
 TinyStories byte representation is a deliberately narrow transfer test.
+
+### Changed-data transfer and timing control
+
+To test whether the endpoint effect was only a TinyStories artifact, the same
+139M AdamW/window-2 shadow protocol was run on a versioned 40 MiB
+[FineWeb-Edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu) byte
+slice with a disjoint 8 MiB validation slice. Seeds 0 and 1 completed with no
+failures:
+
+| Seed | No-op final | Shadow raw | Shadow merged | Endpoint improvement | Branch wall (noop/shadow) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0 | `1.53561` | `1.52901` | `1.51030` | `0.02531` | `253.29s / 257.03s` |
+| 1 | `1.49854` | `1.49769` | `1.47577` | `0.02277` | `253.81s / 259.73s` |
+
+This is a useful changed-distribution replication of the endpoint-quality
+mechanism. It is still not a speedup: the live AdamW branch consumes the same
+training tokens, and the merged weights are exposed only after the last
+checkpoint. The seed-2 no-op parent completed, but its candidate process hit a
+host-level `SIGILL`/`SIGSEGV` in the PyTorch/glibc stack while saving or copying
+trajectory state; it is excluded rather than counted as a failed model branch.
+
+The saved FineWeb-Edu seed-0 snapshots also answer the timing question. The
+average of the latest two snapshots had validation losses `2.44547`, `2.02055`,
+`1.78341`, `1.66406`, `1.59827`, `1.56854`, and `1.51030` at global steps
+`768`, `1024`, `1280`, `1536`, `1792`, `2048`, and `2304`. It crossed the
+matched no-op endpoint (`1.53561`) only at step `2304`.
+
+Finally, a live correction at global step `1536`, followed by the same 768-step
+continuation as a matched no-op, finished at `1.53933` versus `1.52830` for
+no-op. Its immediate and recovery losses were also worse (`1.74164/1.60356`
+versus `1.70629/1.58843`). The current action should therefore remain an
+endpoint shadow baseline. The next driver work should learn when to expose or
+reject such a correction, with a cost-to-target evaluator, rather than simply
+making the correction more aggressive.
