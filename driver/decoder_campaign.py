@@ -916,6 +916,7 @@ def _run_case(
     uv_lock_sha256: str,
     objective_sha256: str,
     history: list[HistoryEntry],
+    strategies: tuple[str, ...],
 ) -> dict[str, Any]:
     target_config = _target_config(campaign, landscape, seed)
     train_tokens = (
@@ -1003,6 +1004,9 @@ def _run_case(
         campaign=campaign,
         history=policy_history,
     )
+    proposals = [proposal for proposal in proposals if proposal.strategy in strategies]
+    if not proposals:
+        raise ValueError("strategy filter removed every proposal")
     branch_results: list[dict[str, Any]] = []
     for proposal in proposals:
         transition, result = _branch(
@@ -1205,6 +1209,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("horizons must satisfy 0 < immediate <= recovery < final")
     landscapes = tuple(args.landscape) if args.landscape else LANDSCAPES
     seeds = tuple(args.seed) if args.seed else SEEDS
+    strategies = tuple(args.strategy) if args.strategy else STRATEGIES
+    if not strategies:
+        raise ValueError("at least one strategy is required")
     if not landscapes or not seeds:
         raise ValueError("at least one landscape and seed are required")
     if any(item not in LANDSCAPES for item in landscapes):
@@ -1259,11 +1266,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 uv_lock_sha256=uv_lock_sha256,
                 objective_sha256=objective_sha256,
                 history=history,
+                strategies=strategies,
             )
             cases.append(case)
             ranking_rows.extend(case["ranking"])
             capability_rows.extend(case["capability"])
-            expected_branches += len(STRATEGIES)
+            expected_branches += len(strategies)
     archive_records = archive.validate()
     if archive_records != expected_branches:
         raise RuntimeError(
@@ -1316,7 +1324,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "cuda_device": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
         "landscapes": list(landscapes),
         "seeds": list(seeds),
-        "strategies": list(STRATEGIES),
+        "strategies": list(strategies),
         "config": asdict(campaign),
         "immutable": {
             "git_commit": code_revision,
@@ -1372,6 +1380,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--landscape", action="append", choices=LANDSCAPES)
     parser.add_argument("--seed", action="append", type=int)
+    parser.add_argument("--strategy", action="append", choices=STRATEGIES)
     parser.add_argument("--width", type=int, default=CampaignConfig.width)
     parser.add_argument("--layers", type=int, default=CampaignConfig.layers)
     parser.add_argument("--heads", type=int, default=CampaignConfig.heads)
