@@ -39,6 +39,28 @@ target-training loop and the research policy:
 plumbing works. It is not a result and should never be used as evidence for
 the research hypothesis.
 
+`driver/quadratic_benchmark.py` is the first real mechanism benchmark. It
+batch-runs development and held-out positive-definite landscapes on CUDA,
+tunes AdamW on development cases, and compares it with a gradient-probe
+structured correction. The correction first tries a diagonal probe and only
+falls back to a full local Hessian probe when the measured response requires
+it. Every probe and solve is charged in the estimated-work ledger.
+
+Run it with the existing CUDA environment:
+
+```bash
+/home/v/proj/bene/aerial-drop-tdk/.venv/bin/python \
+  -m driver.quadratic_benchmark --output runs/quadratic-first
+```
+
+This is a scoped optimization-track mechanism test, not evidence of a
+language-model or general-training 10× gain. The first sweep reaches a hard
+`1e-5` relative quadratic threshold with a 69.5× median estimated-work ratio
+and 3.45× batched wall-time ratio across nine held-out cases. At the easier
+`1e-3` threshold it reaches only 4.54× estimated work and 1.07× wall time.
+The full contract therefore remains open; the easy-threshold overhead is the
+next problem to solve.
+
 Run it with:
 
 ```bash

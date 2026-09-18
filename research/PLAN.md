@@ -48,6 +48,16 @@ on fresh seeds. A useful first result is a mechanism-level gain; a broad
 speedup requires held-out widths/depths or a changed data distribution and
 whole-run accounting.
 
+## First measured checkpoint
+
+The initial CUDA mechanism run uses 16-dimensional diagonal, rotated, and
+two-block positive-definite landscapes. It is useful evidence that local
+curvature probes can create a large hard-threshold gain, but it does not meet
+the full research objective: the easy threshold is below 10×, the target is
+not a language model, and the current synthetic archive has no serialized
+model/optimizer/data checkpoint. Keep this result as a mechanism screen and
+do not promote it to a general training claim.
+
 ## Known ceilings
 
 The current controller groups experience by action kind and ignores telemetry
