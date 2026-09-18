@@ -10,6 +10,7 @@ import json
 import math
 import os
 import random
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -489,7 +490,35 @@ def run_episode(
         if tuple(item.action for item in estimates) != actions:
             raise ValueError("controller must return one estimate per action, in order")
         chosen = selector.choose(estimates)
-        outcome = target.execute(chosen.action)
+        # A failed branch is evidence, not a missing row.  Targets commonly
+        # raise on OOM, NaN/divergence, timeout, or a bad checkpoint restore;
+        # convert that failure into a terminal Outcome so the archive and any
+        # end-to-end cost report remain fail-closed.  We deliberately charge
+        # observed wall time even when the target cannot report its FLOPs.
+        started = time.perf_counter()
+        try:
+            outcome = target.execute(chosen.action)
+        except Exception as exc:  # pragma: no cover - exercised by self-check
+            elapsed = time.perf_counter() - started
+            detail = str(exc).strip().replace("\n", " ")[:400]
+            failure = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+            outcome = Outcome(
+                after=None,
+                compute_flops=0.0,
+                wall_seconds=elapsed,
+                reward_task=0.0,
+                learning_progress=0.0,
+                accepted=False,
+                done=True,
+                failure=failure,
+                metadata={
+                    "failure_kind": "target_exception",
+                    "exception_type": type(exc).__name__,
+                    "exception_message": detail,
+                    "failed_action": chosen.action.to_dict(),
+                    "failure_wall_seconds_observed": elapsed,
+                },
+            )
         transition = Transition(
             transition_id=f"{run_id}:{decision}",
             run_id=run_id,
