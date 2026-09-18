@@ -57,9 +57,12 @@ cannot replace branches collected with this repository's exact target loop.
    accounting, then TinyStories-sized language runs for trajectory collection,
    then a fixed FineWeb shard for a changed-data check. Pico/OLMo can be added
    only when their artifact manifests pass the same provenance checks.
-4. Use a numerical causal transformer with a small per-run adapter for the
-   driver. Do not start with a pretrained language backbone: it may spend
-   capacity on language while importing little numerical dynamics knowledge.
+4. Select the steerer by measured failure mode: begin with the existing small
+   numerical MLP plus retrieval and an ensemble/support gate; add a GRU or
+   per-run adapter only if history helps at matched compute; test a numerical
+   causal transformer only if long-range history remains the bottleneck. Do
+   not start with a pretrained language backbone: it may spend capacity on
+   language while importing little numerical dynamics knowledge.
 5. Treat NiNo as the nearest nowcasting reference, not as a dependency. Begin
    with a graph-free recent-update basis that fits the existing checkpoint
    contract.
@@ -81,3 +84,21 @@ repository must collect its own traces.
 The first claim remains narrow: on held-out complete runs, can a driver choose
 a bounded AdamW history jump that reduces end-to-end cost to the same quality,
 including probes, rejected actions, recovery, and driver overhead?
+
+## Steerer architecture ladder
+
+Architecture is selected by the error it removes, not by model size:
+
+| Observed failure | Next model | Relevant precedent | Promotion test |
+| --- | --- | --- | --- |
+| No signal beyond local features | Keep the MLP; improve telemetry or actions | [NiNo](https://github.com/SamsungSAILMontreal/nino) graph-free nowcasting; [Celo2](https://github.com/amoudgl/celo2) compact learned rules | Action-ranking regret and safe-delta prediction beat fixed actions on whole-run holdouts |
+| Sparse data or out-of-support states | Retrieval plus case-level ensemble/support gate | [PETS](https://arxiv.org/abs/1805.12114) uncertainty by model disagreement | Selected actions are safe and improve cost; otherwise abstention is the result |
+| Short history adds signal | GRU or recurrent per-run state | [L2O-Scale](https://proceedings.mlr.press/v70/wichrowska17a.html), [learned_optimization](https://github.com/google/learned_optimization) | History-conditioned ranking beats snapshot MLP at equal inference budget |
+| Long, nonlocal branch history adds signal | Small causal Transformer | [OptFormer](https://github.com/google-research/optformer), [Algorithm Distillation](https://arxiv.org/abs/2210.14215) | Transformer beats GRU on fresh trajectories after driver cost is counted |
+| Attention context becomes the bottleneck | SSM | [Mamba](https://github.com/state-spaces/mamba) | Same decision quality at lower end-to-end driver cost |
+| Fast run-specific specialization is needed | Hypernetwork-generated adapter | [Graph HyperNetworks](https://github.com/facebookresearch/ppuda) | Adapter transfer beats direct conditioning without instability |
+
+The current screens have not crossed the MLP-to-GRU gate: the selector is
+overconfident on landscape shift, and its safe support gate abstains rather
+than finding a positive action. That is a data/action-interface limitation,
+not evidence that a Transformer is too small.

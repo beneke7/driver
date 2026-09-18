@@ -69,19 +69,31 @@ pretrained language backbone to this collection campaign.
 
 ## Driver shape
 
-Start with one shared numerical causal transformer, hidden size 512, eight
-layers, and eight heads, plus a small per-run adapter. It predicts future loss,
-update coefficients, uncertainty, and recovery risk. This is deliberately
-large enough to test the “embedded landscape knowledge” idea but small enough
-that driver cost can be measured on the 5090.
+Start with the smallest action-conditioned model that can falsify the idea: a
+normalized numerical MLP over the current snapshot and a short explicit
+history window, with a separate action head. Keep `noop` as an always-legal
+action. Add retrieval and a small case-bootstrap ensemble before increasing
+the backbone. A GRU earns its place only if history improves action ranking at
+matched driver cost; a numerical causal Transformer earns its place only if a
+GRU still loses on long, nonlocal histories.
+
+This staged choice follows the closest precedents: [NiNo](https://github.com/SamsungSAILMontreal/nino)
+for compact weight nowcasting, [L2O-Scale](https://proceedings.mlr.press/v70/wichrowska17a.html)
+for recurrent learned optimization state, and [OptFormer](https://github.com/google-research/optformer)
+and [Algorithm Distillation](https://arxiv.org/abs/2210.14215) for
+history-conditioned experiment behavior. None establishes that a large
+Transformer is the right first steerer for AdamW.
 
 The adapter comparison is:
 
-1. snapshot-only predictor;
-2. history-conditioned predictor;
-3. recurrent per-run memory;
-4. small online adapter;
-5. online core updates only if the adapter cannot track response changes.
+1. snapshot-only MLP;
+2. explicit-history MLP and retrieval;
+3. case-bootstrap ensemble with support/abstention;
+4. recurrent per-run memory;
+5. small online adapter;
+6. numerical causal Transformer only if the previous rung is demonstrably
+   history-limited;
+7. online core updates only if the adapter cannot track response changes.
 
 Train the first world model with supervised next-outcome targets. The driver
 must first predict intervention outcomes and rank actions on fresh branches.
