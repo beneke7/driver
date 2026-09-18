@@ -35,6 +35,12 @@ Every branch must preserve or identify:
 - action, horizon, tokens, wall time, estimated FLOPs, losses, quality,
   recovery cost, failure status, and selector metadata.
 
+`driver/checkpoints.py` now provides the matched-branch primitive, and its
+torch self-check verifies model, optimizer, CPU/CUDA RNG, and hash validation.
+The quadratic mechanism benchmark still uses synthetic initial states rather
+than full target-model checkpoints; the decoder experiment must use this
+primitive before any intervention result is considered causal.
+
 An archive is valid only when parent transitions appear earlier in the same
 causal run, IDs are unique, and failed branches remain visible in the cost
 account. Split evaluation by complete runs, not adjacent windows. Anything

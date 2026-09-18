@@ -62,6 +62,12 @@ Run it with that environment:
 Evidence directories are append-safe: use a fresh `--output` for every run;
 the benchmark refuses to append duplicate transition IDs to an existing run.
 
+The matched-checkpoint boundary is independently checked with:
+
+```bash
+.venv/bin/python -m driver.torch_self_check
+```
+
 This is a scoped optimization-track mechanism test, not evidence of a
 language-model or general-training 10× gain. The first sweep reaches a hard
 `1e-5` relative quadratic threshold with a 69.5× median estimated-work ratio
