@@ -181,3 +181,23 @@ pretrained language backbones, distributed execution, dashboards, and a
 database until a simpler comparison identifies a bottleneck that needs them.
 
 See [research/PLAN.md](research/PLAN.md) for the staged experiment contract.
+
+## History-jump setup
+
+The next route is an AdamW history-jump driver. It learns from per-step
+trajectories, predicts a bounded displacement from recent AdamW updates, and
+only spends a real branch when the predicted gain clears its confidence and
+risk checks. The setup is deliberately a contract, not a runnable driver yet:
+
+- [research/OPEN_SOURCE_LANDSCAPE.md](research/OPEN_SOURCE_LANDSCAPE.md) records
+  the reusable open-source models, datasets, and reference implementations;
+- [research/HISTORY_JUMP_SETUP.md](research/HISTORY_JUMP_SETUP.md) defines the
+  first data collection and promotion experiment;
+- [configs/history_jump_adamw.json](configs/history_jump_adamw.json) is the
+  versioned initial configuration;
+- [data/README.md](data/README.md) defines the local data layout. Raw data and
+  trajectory artifacts stay ignored until they have a manifest and checksum.
+
+No external repository or dataset is a runtime dependency yet. The first
+implementation should reuse the existing checkpoint/branch contract and add
+only per-step telemetry plus a compact AdamW update history.

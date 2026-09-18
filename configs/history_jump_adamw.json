@@ -1,0 +1,66 @@
+{
+  "schema": "landscape-driver.history-jump.v1",
+  "status": "setup_only",
+  "target": {
+    "optimizer": "AdamW",
+    "landscapes": [
+      "delayed_copy",
+      "phase_switch",
+      "text_shard"
+    ],
+    "development_seeds": [0, 1],
+    "heldout_seeds": [2],
+    "architecture": {
+      "parameters": 85350912,
+      "width": 768,
+      "layers": 12,
+      "heads": 12,
+      "vocab_size": 128,
+      "context": 128,
+      "batch_size": 128
+    }
+  },
+  "trace": {
+    "record_every_steps": 4,
+    "history_steps": 16,
+    "fields": [
+      "loss",
+      "loss_slope",
+      "loss_second_difference",
+      "gradient_norm",
+      "update_norm",
+      "gradient_update_alignment",
+      "parameter_norm",
+      "role_gradient_norms",
+      "role_update_norms",
+      "adam_momentum_norms",
+      "adam_variance_norms",
+      "data_cursor"
+    ],
+    "store": "compact per-step telemetry plus recent AdamW updates by tensor role; full checkpoints only at branch and jump boundaries"
+  },
+  "actions": {
+    "kind": "history_jump",
+    "horizons_steps": [8, 16, 32],
+    "blends": [0.25, 0.5, 1.0],
+    "basis": "recent_adamw_updates_by_role",
+    "advance_data_cursor": true,
+    "probe_after_jump": true,
+    "recovery": "adamw_fallback"
+  },
+  "driver": {
+    "backbone": "causal_numerical_transformer",
+    "hidden_size": 512,
+    "layers": 8,
+    "heads": 8,
+    "outputs": [
+      "future_update_coefficients",
+      "future_loss",
+      "uncertainty",
+      "recovery_risk"
+    ],
+    "online_adapter": "small_per_run"
+  },
+  "split": "whole_trajectory",
+  "promotion": "not_evaluated"
+}
