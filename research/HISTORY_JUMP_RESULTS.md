@@ -183,3 +183,13 @@ training speedup yet. The next test is whether the same rectification reaches
 the raw endpoint's quality at an earlier checkpoint, and whether a driver can
 choose when to expose the merged shadow weights without damaging the live
 AdamW state.
+
+The matched 139M campaign initially used a four-checkpoint shadow window and
+was negative (`0.85449` merged versus `0.84933` raw). A saved-snapshot window
+scan found that two checkpoints were better (`0.84181` versus `0.84933`). The
+first complete harness run with `trajectory_window=2` reproduced that direction:
+the raw shadow branch ended at `0.84763`, its merged endpoint at `0.84090`, and
+the matched no-op at `0.84843`. The shadow branch took `257.56s` versus
+`253.32s` for no-op and added about `4.56e9` estimated FLOPs. This is the
+current strongest result, but it remains one seed, one byte-level corpus, and
+an endpoint-quality gain rather than a demonstrated skip.
