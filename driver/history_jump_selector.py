@@ -216,6 +216,7 @@ def _selector_report(
     examples: list[Example],
     predictions: torch.Tensor,
     train_examples: list[Example],
+    risk_radius: float,
 ) -> dict[str, Any]:
     indexed = [
         {
@@ -242,7 +243,7 @@ def _selector_report(
     for candidates in groups.values():
         predicted = min(candidates, key=lambda item: item["prediction"])
         chosen_prediction = min(0.0, predicted["prediction"])
-        if chosen_prediction < 0.0:
+        if chosen_prediction < -risk_radius:
             selected.append(predicted["example"].final_delta)
             selected_jump += 1
         else:
@@ -278,6 +279,7 @@ def _selector_report(
         "noop_mean_final_delta": sum(noop) / len(noop),
         "selected_jump_rate": selected_jump / len(selected),
         "selected_top1_rate": top1 / len(selected),
+        "risk_radius": risk_radius,
     }
 
 
@@ -346,7 +348,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         epochs=args.epochs,
         device=device,
     )
+    train_predictions = _predict(model, train_values.to(device)).cpu()
     predictions = _predict(model, test_values.to(device)).cpu()
+    residuals = (train_predictions - train_targets).abs()
+    calibration_radius = float(torch.quantile(residuals, 0.9).item())
+    if args.risk_radius is None:
+        risk_radius = calibration_radius
+    else:
+        if args.risk_radius < 0.0 or not math.isfinite(args.risk_radius):
+            raise ValueError("risk radius must be finite and non-negative")
+        risk_radius = args.risk_radius
     report = {
         "schema": "landscape-driver.history-jump-selector.v1",
         "results": args.results,
@@ -358,7 +369,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "hidden": args.hidden,
         "epochs": args.epochs,
         "device": str(device),
-        "metrics": _selector_report(test_examples, predictions, train_examples),
+        "calibration_radius_90": calibration_radius,
+        "metrics": _selector_report(
+            test_examples, predictions, train_examples, risk_radius
+        ),
     }
     output = Path(args.output)
     if output.exists() and any(output.iterdir()):
@@ -401,6 +415,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--holdout-seed", action="append", type=int)
     parser.add_argument("--hidden", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=800)
+    parser.add_argument("--risk-radius", type=float)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--self-check", action="store_true")
