@@ -19,9 +19,12 @@ whether matched checkpoint branches expose a useful state-dependent choice.
 5. Add the cheap online action-statistics baseline. Only after it has signal,
    replace it with a shared numerical history model and a small per-run
    adapter.
-6. Test structured corrections first, then adaptive weight nowcasting, then
+6. Add explicit real/replay/imagined branch provenance. Permit replay only for
+   recorded causal branches and permit imagined proposals only after
+   action-conditioned errors are calibrated on fresh real branches.
+7. Test structured corrections first, then adaptive weight nowcasting, then
    data/work allocation. Keep the three routes separately attributable.
-7. Add short imagined rollouts only when action-conditioned predictions are
+8. Add short imagined rollouts only when action-conditioned predictions are
    calibrated on fresh real branches.
 
 ## Branch contract
@@ -37,6 +40,9 @@ Every branch must preserve or identify:
 
 `driver/checkpoints.py` now provides the matched-branch primitive, and its
 torch self-check verifies model, optimizer, CPU/CUDA RNG, and hash validation.
+`driver/branching.py` provides the dependency-free sibling ledger and a small
+state-conditioned online model. `driver/core.py` records target exceptions as
+failed terminal transitions, preserving observed wall time in the archive.
 The quadratic mechanism benchmark still uses synthetic initial states rather
 than full target-model checkpoints; the decoder experiment must use this
 primitive before any intervention result is considered causal.
