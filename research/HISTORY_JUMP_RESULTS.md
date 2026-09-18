@@ -279,3 +279,11 @@ the two completed 139M FineWeb-Edu seeds. This supports a width-robust
 endpoint rectification mechanism, not a claim that overparameterization causes
 the effect. Both widths still consume the same continuation tokens; the next
 step is a learned timing/acceptance gate and an explicit cost-to-target test.
+
+The 85M saved-snapshot cost-to-target check is negative in the stronger sense:
+the window-2 average crossed its matched no-op endpoint only at global step
+`2304` for all three seeds. At step `2048`, the merged losses were
+`1.49618`, `1.50640`, and `1.50426`, while the corresponding full-budget no-op
+endpoints were `1.46471`, `1.47994`, and `1.47746`. The endpoint merge is
+therefore a consistent quality improvement at fixed work, not yet a measured
+reduction in work to the same quality.
