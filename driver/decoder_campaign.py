@@ -1191,6 +1191,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         train_file=args.train_file,
         validation_file=args.validation_file,
         learning_rate=args.learning_rate,
+        pulse_attention=args.pulse_attention,
+        pulse_mlp=args.pulse_mlp,
         amp=not args.no_amp,
     )
     if campaign.width % campaign.heads:
@@ -1386,6 +1388,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--train-file")
     parser.add_argument("--validation-file")
     parser.add_argument("--learning-rate", type=float, default=CampaignConfig.learning_rate)
+    parser.add_argument("--pulse-attention", type=float, default=CampaignConfig.pulse_attention)
+    parser.add_argument("--pulse-mlp", type=float, default=CampaignConfig.pulse_mlp)
     parser.add_argument("--no-amp", action="store_true")
     parser.add_argument("--allow-small-target", action="store_true")
     parser.add_argument("--allow-dirty", action="store_true")
