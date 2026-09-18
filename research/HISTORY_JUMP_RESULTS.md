@@ -135,3 +135,33 @@ long-horizon maneuver protocol in
 [`research/LONG_HORIZON_MANEUVER.md`](LONG_HORIZON_MANEUVER.md), using a
 versioned language-data shard, an overparameterized target condition, and
 post-recovery slope/capability measurements.
+
+### First real-data long-horizon trajectory screen
+
+The first real-data maneuver used raw UTF-8 bytes from the versioned TinyStories
+shard, a 139M-parameter decoder, 256 prefix steps, and a 2,048-step
+continuation. The trajectory actions used eight snapshots at 32-step spacing.
+Relative to the matched no-op (`0.85126` final validation loss), recent-window
+averaging ended at `0.85506` and two-window extrapolation at `0.85638`; both
+also had worse immediate and recovery losses. The extrapolation intervention
+had normalized energy `0.625` and added about `2.23e9` estimated FLOPs, so the
+negative result includes the actual maneuver overhead.
+
+To test the late-stage premise, an 85M control used a 2,048-step prefix and
+eight snapshots at 256-step spacing. No-op finished at `0.77207`. Preserved
+state averaging briefly improved the intervention loss (`0.89561` versus
+parent `0.92123`) but finished at `0.77819`; extrapolation with alpha `1.0`
+finished at `0.79516`. Zeroing AdamW moments after the maneuver was not a
+solution: averaging-reset finished at `0.87358`, while extrapolation-reset
+finished at `0.79397`. A reused-parent alpha scan for preserved-state
+extrapolation found final losses `0.77834`, `0.77849`, `0.77722`, and `0.77867`
+for alpha `0.0625`, `0.125`, `0.25`, and `0.5`, respectively. None beat the
+matched no-op, although alpha `0.25` was the least harmful extrapolation.
+
+Interpretation: this two-window action is not yet a productive regime change
+under continued AdamW. The late-stage action can lower validation loss at the
+intervention point, but its benefit is lost during ordinary continuation. The
+next discriminating control is a cautious recovery schedule or an
+optimizer-state interpolation, not a larger steerer. The interrupted 139M
+late-prefix run is excluded because it never produced a complete parent and
+manifest.
