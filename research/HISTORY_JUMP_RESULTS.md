@@ -201,3 +201,12 @@ the matched noop endpoint was `0.84843`. Thus the shadow was better than raw
 at most late checkpoints and better than the final noop only at the endpoint.
 The next test extends the continuation to 4,096 steps so an earlier crossing
 can be measured rather than inferred.
+
+A fresh 139M seed-1 replication with the same window-2 protocol also passed:
+noop ended at `0.85290`, the shadow branch's raw endpoint was `0.85342`, and
+its merged endpoint was `0.84475`. The shadow branch took `257.34s` versus
+`253.66s` for noop. The matched endpoint improvements are therefore `0.00673`
+and `0.00867` on seeds 0 and 1, respectively. This is strong enough to
+promote window-2 shadow averaging as a baseline mechanism, but not enough to
+claim transfer until seed 2, changed data, and earlier cost-to-quality are
+measured.
