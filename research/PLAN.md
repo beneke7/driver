@@ -41,6 +41,11 @@ The quadratic mechanism benchmark still uses synthetic initial states rather
 than full target-model checkpoints; the decoder experiment must use this
 primitive before any intervention result is considered causal.
 
+`driver/decoder_benchmark.py` now supplies that first target loop for three
+local byte landscapes: delayed copy, phase switch, and a fixed text shard. It
+only compares `noop` with a four-step fixed `role_pulse`; the controller and
+real corpus holdout remain future work.
+
 An archive is valid only when parent transitions appear earlier in the same
 causal run, IDs are unique, and failed branches remain visible in the cost
 account. Split evaluation by complete runs, not adjacent windows. Anything

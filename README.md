@@ -76,6 +76,18 @@ and 3.45× batched wall-time ratio across nine held-out cases. At the easier
 The full contract therefore remains open; the easy-threshold overhead is the
 next problem to solve.
 
+The first target-training branch loop is:
+
+```bash
+.venv/bin/python -m driver.decoder_benchmark \
+  --landscape delayed_copy --output runs/decoder-delayed-copy-0
+```
+
+It runs a common prefix, saves a complete parent checkpoint, restores matched
+`noop` and `role_pulse` branches, and records immediate, recovery, and final
+validation loss. The pulse is a deliberately fixed control action; it is not
+yet a learned driver.
+
 Run it with:
 
 ```bash
