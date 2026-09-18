@@ -202,6 +202,40 @@ def _standardize(
     return (train - mean) / scale, (test - mean) / scale, mean, scale
 
 
+def _support_distances(
+    train_examples: list[Example],
+    test_examples: list[Example],
+    names: list[str],
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return leave-one-case-out calibration and test nearest-neighbor distances."""
+    cases = sorted({example.case_id for example in train_examples})
+    if len(cases) < 2:
+        raise ValueError("support calibration needs at least two training cases")
+    calibration: list[torch.Tensor] = []
+    for case in cases:
+        reference = [example for example in train_examples if example.case_id != case]
+        held_out = [example for example in train_examples if example.case_id == case]
+        reference_values = _matrix(reference, names)
+        held_out_values = _matrix(held_out, names)
+        mean = reference_values.mean(dim=0)
+        scale = reference_values.std(dim=0, unbiased=False).clamp_min(1e-6)
+        calibration.append(
+            torch.cdist(
+                (held_out_values - mean) / scale,
+                (reference_values - mean) / scale,
+            ).min(dim=1).values
+        )
+    train_values = _matrix(train_examples, names)
+    test_values = _matrix(test_examples, names)
+    mean = train_values.mean(dim=0)
+    scale = train_values.std(dim=0, unbiased=False).clamp_min(1e-6)
+    test_distances = torch.cdist(
+        (test_values - mean) / scale,
+        (train_values - mean) / scale,
+    ).min(dim=1).values
+    return torch.cat(calibration), test_distances
+
+
 def _group_key(example: Example) -> tuple[str, int, int]:
     return example.case_id, example.parent_step, example.horizon
 
@@ -215,6 +249,7 @@ def _predict(model: Predictor, values: torch.Tensor) -> torch.Tensor:
 def _selector_report(
     examples: list[Example],
     predictions: torch.Tensor,
+    decision_predictions: torch.Tensor,
     train_examples: list[Example],
     risk_radius: float,
 ) -> dict[str, Any]:
@@ -222,8 +257,11 @@ def _selector_report(
         {
             "example": example,
             "prediction": float(prediction),
+            "decision": float(decision),
         }
-        for example, prediction in zip(examples, predictions.tolist())
+        for example, prediction, decision in zip(
+            examples, predictions.tolist(), decision_predictions.tolist()
+        )
     ]
     groups: dict[tuple[str, int, int], list[dict[str, Any]]] = defaultdict(list)
     for item in indexed:
@@ -241,8 +279,8 @@ def _selector_report(
     selected_jump = 0
     top1 = 0
     for candidates in groups.values():
-        predicted = min(candidates, key=lambda item: item["prediction"])
-        chosen_prediction = min(0.0, predicted["prediction"])
+        predicted = min(candidates, key=lambda item: item["decision"])
+        chosen_prediction = min(0.0, predicted["decision"])
         if chosen_prediction < -risk_radius:
             selected.append(predicted["example"].final_delta)
             selected_jump += 1
@@ -290,7 +328,10 @@ def _train(
     hidden: int,
     epochs: int,
     device: torch.device,
+    seed: int | None = None,
 ) -> Predictor:
+    if seed is not None:
+        torch.manual_seed(seed)
     model = Predictor(train_values.shape[1], hidden).to(device)
     values = train_values.to(device)
     targets = train_targets.to(device)
@@ -306,9 +347,62 @@ def _train(
     return model
 
 
+def _train_ensemble(
+    train_values: torch.Tensor,
+    train_targets: torch.Tensor,
+    train_examples: list[Example],
+    *,
+    hidden: int,
+    epochs: int,
+    device: torch.device,
+    size: int,
+    seed: int,
+) -> list[Predictor]:
+    cases = sorted({example.case_id for example in train_examples})
+    if size < 1 or len(cases) < 2:
+        raise ValueError("an ensemble needs at least two training cases")
+    models = []
+    for member in range(size):
+        generator = torch.Generator().manual_seed(seed + member)
+        sampled = [
+            cases[int(torch.randint(len(cases), (), generator=generator))]
+            for _ in cases
+        ]
+        indices = [
+            index
+            for case in sampled
+            for index, example in enumerate(train_examples)
+            if example.case_id == case
+        ]
+        models.append(
+            _train(
+                train_values[indices],
+                train_targets[indices],
+                hidden=hidden,
+                epochs=epochs,
+                device=device,
+                seed=seed + member,
+            )
+        )
+    return models
+
+
+def _predict_ensemble(
+    models: list[Predictor], values: torch.Tensor, device: torch.device
+) -> tuple[torch.Tensor, torch.Tensor]:
+    predictions = torch.stack([_predict(model, values.to(device)) for model in models])
+    return predictions.mean(dim=0).cpu(), predictions.std(dim=0, unbiased=False).cpu()
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
     if args.seed < 0:
         raise ValueError("seed must be non-negative")
+    if args.ensemble_size < 1:
+        raise ValueError("ensemble size must be positive")
+    if args.uncertainty_multiplier < 0.0 or not math.isfinite(
+        args.uncertainty_multiplier
+    ):
+        raise ValueError("uncertainty multiplier must be finite and non-negative")
     torch.manual_seed(args.seed)
     result_dirs = [Path(value) for value in args.results]
     trace_dirs = None
@@ -340,16 +434,45 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     test_targets = torch.tensor(
         [example.final_delta for example in test_examples], dtype=torch.float32
     )
-    device = torch.device(args.device)
-    model = _train(
-        train_values,
-        train_targets,
-        hidden=args.hidden,
-        epochs=args.epochs,
-        device=device,
+    support_calibration, support_distances = _support_distances(
+        train_examples, test_examples, names
     )
-    train_predictions = _predict(model, train_values.to(device)).cpu()
-    predictions = _predict(model, test_values.to(device)).cpu()
+    support_calibration_radius = float(
+        torch.quantile(support_calibration, 0.95).item()
+    )
+    if args.support_radius is None:
+        support_radius = support_calibration_radius
+    else:
+        if args.support_radius < 0.0 or not math.isfinite(args.support_radius):
+            raise ValueError("support radius must be finite and non-negative")
+        support_radius = args.support_radius
+    device = torch.device(args.device)
+    if args.ensemble_size == 1:
+        model = _train(
+            train_values,
+            train_targets,
+            hidden=args.hidden,
+            epochs=args.epochs,
+            device=device,
+            seed=args.seed,
+        )
+        train_predictions = _predict(model, train_values.to(device)).cpu()
+        predictions = _predict(model, test_values.to(device)).cpu()
+        prediction_std = torch.zeros_like(predictions)
+        models = [model]
+    else:
+        models = _train_ensemble(
+            train_values,
+            train_targets,
+            train_examples,
+            hidden=args.hidden,
+            epochs=args.epochs,
+            device=device,
+            size=args.ensemble_size,
+            seed=args.seed,
+        )
+        train_predictions, _ = _predict_ensemble(models, train_values, device)
+        predictions, prediction_std = _predict_ensemble(models, test_values, device)
     residuals = (train_predictions - train_targets).abs()
     calibration_radius = float(torch.quantile(residuals, 0.9).item())
     if args.risk_radius is None:
@@ -358,6 +481,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         if args.risk_radius < 0.0 or not math.isfinite(args.risk_radius):
             raise ValueError("risk radius must be finite and non-negative")
         risk_radius = args.risk_radius
+    decision_predictions = predictions + args.uncertainty_multiplier * prediction_std
+    decision_predictions = decision_predictions.clone()
+    decision_predictions[support_distances > support_radius] = float("inf")
     report = {
         "schema": "landscape-driver.history-jump-selector.v1",
         "results": args.results,
@@ -368,10 +494,22 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "features": names,
         "hidden": args.hidden,
         "epochs": args.epochs,
+        "ensemble_size": args.ensemble_size,
+        "uncertainty_multiplier": args.uncertainty_multiplier,
         "device": str(device),
         "calibration_radius_90": calibration_radius,
+        "support_calibration_radius_95": support_calibration_radius,
+        "support_radius": support_radius,
+        "test_support_rate": float(
+            (support_distances <= support_radius).float().mean().item()
+        ),
+        "test_prediction_std_mean": float(prediction_std.mean().item()),
         "metrics": _selector_report(
-            test_examples, predictions, train_examples, risk_radius
+            test_examples,
+            predictions,
+            decision_predictions,
+            train_examples,
+            risk_radius,
         ),
     }
     output = Path(args.output)
@@ -381,17 +519,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     (output / "report.json").write_text(
         json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8"
     )
-    torch.save(
-        {
-            "model": model.state_dict(),
-            "feature_names": names,
-            "mean": mean,
-            "scale": scale,
-            "holdout_landscapes": sorted(holdout_landscapes),
-            "holdout_seeds": sorted(holdout_seeds),
-        },
-        output / "predictor.pt",
-    )
+    payload = {
+        "feature_names": names,
+        "mean": mean,
+        "scale": scale,
+        "holdout_landscapes": sorted(holdout_landscapes),
+        "holdout_seeds": sorted(holdout_seeds),
+        "ensemble_size": args.ensemble_size,
+    }
+    if args.ensemble_size == 1:
+        payload["model"] = models[0].state_dict()
+    else:
+        payload["models"] = [model.state_dict() for model in models]
+    torch.save(payload, output / "predictor.pt")
     print(json.dumps(report, indent=2))
     return report
 
@@ -415,6 +555,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--holdout-seed", action="append", type=int)
     parser.add_argument("--hidden", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=800)
+    parser.add_argument("--ensemble-size", type=int, default=1)
+    parser.add_argument("--uncertainty-multiplier", type=float, default=1.0)
+    parser.add_argument("--support-radius", type=float)
     parser.add_argument("--risk-radius", type=float)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--seed", type=int, default=0)

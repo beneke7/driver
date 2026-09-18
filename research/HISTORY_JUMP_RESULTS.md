@@ -67,3 +67,13 @@ Transformer steerer is deferred until that cheap control either shows a
 capacity-limited action-ranking error or the added telemetry makes a compact
 model underfit. Fresh seed-2 branch screens are being collected before that
 comparison.
+
+The first case-bootstrap ensemble (five MLPs) sharpened this result. On
+delayed-copy seed 2 it abstained on all 12 decision groups and therefore
+avoided harm, but the fixed action baseline was better (`-0.00121` versus
+`0.0`). On the text holdout, ensemble disagreement alone still selected every
+bad jump: the members shared the same extrapolation bias. A leave-one-case-out
+nearest-neighbor support gate fixed that failure, rejecting all text cases;
+its default 95th-percentile support radius also rejected the delayed seed-2
+case. Widening the radius to `12` admitted delayed seed 2 but still selected
+no jumps. This is useful safety machinery, not evidence of a steering gain.
