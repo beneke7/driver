@@ -193,6 +193,8 @@ risk checks. The setup is deliberately a contract, not a runnable driver yet:
   the reusable open-source models, datasets, and reference implementations;
 - [research/HISTORY_JUMP_SETUP.md](research/HISTORY_JUMP_SETUP.md) defines the
   first data collection and promotion experiment;
+- [research/LONG_HORIZON_MANEUVER.md](research/LONG_HORIZON_MANEUVER.md)
+  defines the overparameterized, real-data, post-recovery maneuver experiment;
 - [configs/history_jump_adamw.json](configs/history_jump_adamw.json) is the
   versioned initial configuration;
 - [data/README.md](data/README.md) defines the local data layout. Raw data and

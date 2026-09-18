@@ -1,6 +1,6 @@
 {
   "schema": "landscape-driver.history-jump.v1",
-  "status": "setup_only",
+  "status": "short_mechanism_screen_complete_long_horizon_next",
   "target": {
     "optimizer": "AdamW",
     "landscapes": [
@@ -49,10 +49,8 @@
     "recovery": "adamw_fallback"
   },
   "driver": {
-    "backbone": "causal_numerical_transformer",
-    "hidden_size": 512,
-    "layers": 8,
-    "heads": 8,
+    "backbone": "numerical_mlp_then_gru_if_history_signal_requires_it",
+    "selection_rule": "choose_by_heldout_action_ranking_and_driver_cost",
     "outputs": [
       "future_update_coefficients",
       "future_loss",
@@ -60,6 +58,34 @@
       "recovery_risk"
     ],
     "online_adapter": "small_per_run"
+  },
+  "long_horizon_maneuver": {
+    "status": "design_ready_not_yet_run",
+    "target_conditions": [
+      {
+        "name": "control_85m",
+        "parameters": 85350912,
+        "role": "existing_reproducible_control"
+      },
+      {
+        "name": "overparameterized_candidate",
+        "parameters": "profiled_70m_to_160m",
+        "role": "test_condition_not_assumed_better"
+      }
+    ],
+    "data": {
+      "source": "versioned_TinyStories_or_FineWeb_Edu_shard",
+      "status": "not_downloaded",
+      "locked_capability_stream": true
+    },
+    "measurements": [
+      "post_recovery_loss_slope",
+      "heldout_loss_area",
+      "tokens_and_wall_to_quality",
+      "locked_endpoint_capability",
+      "total_target_driver_probe_recovery_cost"
+    ],
+    "promotion_requires": "fresh_seeds_and_changed_data_or_architecture_holdout"
   },
   "split": "whole_trajectory",
   "promotion": "not_evaluated"

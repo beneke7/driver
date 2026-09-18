@@ -121,3 +121,17 @@ decayed AdamW moments and advanced the optimizer step through the skipped
 horizon was worse at the same blend: final `+0.00046`, recovery `+0.00173`.
 The optimizer-state rule is therefore not promoted; the variant remains in the
 archive as a causal negative control.
+
+A checkpoint-history secant/nowcasting baseline was then tested on the same
+delayed-copy seed-2 parents at blend `0.25`. It was closer to neutral than the
+momentum pulse in final loss (`+0.000045`) but still worsened immediate loss
+(`+0.0292`) and recovery (`+0.00099`), with a `0.871×` wall ratio and no safe
+branches. This is a useful NiNo-style open-loop control, not evidence that
+history alone can collapse the language-model landscape.
+
+These short screens now have a clear ceiling: they test only 64-step synthetic
+trajectories and a transient endpoint. The next required experiment is the
+long-horizon maneuver protocol in
+[`research/LONG_HORIZON_MANEUVER.md`](LONG_HORIZON_MANEUVER.md), using a
+versioned language-data shard, an overparameterized target condition, and
+post-recovery slope/capability measurements.
