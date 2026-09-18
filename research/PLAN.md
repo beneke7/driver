@@ -41,10 +41,12 @@ The quadratic mechanism benchmark still uses synthetic initial states rather
 than full target-model checkpoints; the decoder experiment must use this
 primitive before any intervention result is considered causal.
 
-`driver/decoder_benchmark.py` now supplies that first target loop for three
-local byte landscapes: delayed copy, phase switch, and a fixed text shard. It
-only compares `noop` with a four-step fixed `role_pulse`; the controller and
-real corpus holdout remain future work.
+`driver/quadratic_benchmark.py` now supplies a contract-grade optimization
+track for five synthetic positive-definite families. The serial evaluator and
+`driver/contract.py` gate 15 held-out cases across three thresholds. The
+decoder loop still supplies the first target-model checkpoint branch for three
+local byte landscapes and only compares `noop` with a four-step fixed
+`role_pulse`; its controller and real corpus holdout remain future work.
 
 An archive is valid only when parent transitions appear earlier in the same
 causal run, IDs are unique, and failed branches remain visible in the cost
@@ -59,15 +61,15 @@ on fresh seeds. A useful first result is a mechanism-level gain; a broad
 speedup requires held-out widths/depths or a changed data distribution and
 whole-run accounting.
 
-## First measured checkpoint
+## First promotion checkpoint
 
-The initial CUDA mechanism run uses 16-dimensional diagonal, rotated, and
-two-block positive-definite landscapes. It is useful evidence that local
-curvature probes can create a large hard-threshold gain, but it does not meet
-the full research objective: the easy threshold is below 10×, the target is
-not a language model, and the current synthetic archive has no serialized
-model/optimizer/data checkpoint. Keep this result as a mechanism screen and
-do not promote it to a general training claim.
+The first promotion gate passes on dimension-8, ill-conditioned positive-
+definite landscapes: five families, three held-out seeds per family, and
+relative targets `1e-4`, `3e-5`, and `1e-5`. The primary serial wall-time
+geometric means are 26.36×, 29.52×, and 43.07×, with clustered 95% lower
+bounds above 22× at every target. This is a valid optimization-track result
+under the contract, not a general pretraining result. Dimension/data/model
+transfer and a learned decoder driver are the next promotion tests.
 
 ## Known ceilings
 

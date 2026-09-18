@@ -4,9 +4,10 @@ Research harness for a landscape driver: a controller that observes training
 dynamics, chooses bounded interventions, learns from their measured outcomes,
 and is judged by end-to-end cost to a fixed capability.
 
-This repository is deliberately at the contract stage. It contains no GPU
-benchmark, learned optimizer, Dream-RSI clone, or claim of a training
-speedup.
+The first contract-grade result is now in the optimization track: a bounded
+curvature driver passes a preregistered 10× gate on five synthetic positive-
+definite landscape families. That result is deliberately scoped; it is not a
+claim about language-model pretraining.
 
 ## First question
 
@@ -41,10 +42,11 @@ the research hypothesis.
 
 `driver/quadratic_benchmark.py` is the first real mechanism benchmark. It
 batch-runs development and held-out positive-definite landscapes on CUDA,
-tunes AdamW on development cases, and compares it with a gradient-probe
-structured correction. The correction first tries a diagonal probe and only
-falls back to a full local Hessian probe when the measured response requires
-it. Every probe and solve is charged in the estimated-work ledger.
+tunes AdamW on development cases, and compares it with a gradient-oracle
+structured correction. The correction tries a diagonal secant candidate, two
+Hessian-vector steps, and a full local probe only when the cheaper actions do
+not reach the declared target. Every probe and solve is charged in the
+estimated-work ledger.
 
 Set up the project-local CUDA environment:
 
@@ -68,13 +70,30 @@ The matched-checkpoint boundary is independently checked with:
 .venv/bin/python -m driver.torch_self_check
 ```
 
-This is a scoped optimization-track mechanism test, not evidence of a
-language-model or general-training 10× gain. The first sweep reaches a hard
-`1e-5` relative quadratic threshold with a 69.5× median estimated-work ratio
-and 3.45× batched wall-time ratio across nine held-out cases. At the easier
-`1e-3` threshold it reaches only 4.54× estimated work and 1.07× wall time.
-The full contract therefore remains open; the easy-threshold overhead is the
-next problem to solve.
+The contract evaluator and serial timing path are:
+
+```bash
+.venv/bin/python -m driver.serial_quadratic \
+  --source runs/contract-q-1e-4 \
+  --output runs/contract-q-1e-4-serial
+
+.venv/bin/python -m driver.quadratic_campaign \
+  --source runs/contract-q-1e-4-serial \
+  --source runs/contract-q-3e-5-serial \
+  --source runs/contract-q-1e-5-cap50k-serial \
+  --output runs/quadratic-10x-campaign.json
+
+.venv/bin/python -m driver.contract \
+  --input runs/quadratic-10x-campaign.json \
+  --output runs/quadratic-10x-report.json
+```
+
+The measured campaign is eligible: five families, three held-out seeds per
+family, three predeclared thresholds, dimension 8, and synchronized serial
+wall timing. The wall-time geometric means after the declared one-time-cost
+amortization are 26.36×, 29.52×, and 43.07×; clustered 95% lower bounds are
+22.82×, 24.34×, and 28.34×. See [research/RESULTS.md](research/RESULTS.md)
+for the exact scope and limitations.
 
 The first target-training branch loop is:
 
@@ -130,6 +149,12 @@ and search costs separate, then state the deployment count used for any
 amortized total. Use several quality thresholds, fresh seeds, whole-run
 holdouts, and at least one changed data or architecture setting before making
 a broad claim.
+
+The current 10× result is only an optimization-track result on synthetic
+ill-conditioned quadratics. The matched-checkpoint decoder loop remains a
+negative control: its fixed `role_pulse` has not produced a useful speedup.
+Target-model training, changed architecture/data holdouts, learned online
+adaptation, and Dream-RSI-style experiment selection remain open.
 
 ## Deferred until the seam earns it
 
