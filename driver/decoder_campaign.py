@@ -13,8 +13,10 @@ import gc
 import hashlib
 import json
 import math
+import os
 import random
 import subprocess
+import tempfile
 import time
 from collections import defaultdict
 from dataclasses import asdict, dataclass
@@ -51,6 +53,8 @@ STRATEGIES = (
     "history_retrieval",
     "online_lr_control",
 )
+TRAJECTORY_STRATEGIES = ("trajectory_average", "trajectory_extrapolate")
+ALL_STRATEGIES = STRATEGIES + TRAJECTORY_STRATEGIES
 QUALITY_FACTORS = (0.995, 0.99, 0.98)
 
 
@@ -76,6 +80,9 @@ class CampaignConfig:
     pulse_mlp: float = 0.95
     open_loop_start: float = 1.10
     open_loop_end: float = 0.95
+    trajectory_interval: int = 32
+    trajectory_window: int = 4
+    trajectory_alpha: float = 1.0
     controller_up: float = 1.05
     controller_down: float = 0.80
     online_up: float = 1.05
@@ -383,6 +390,8 @@ def _proposals(
         "shallow_controller": "noop",
         "history_retrieval": "noop",
         "online_lr_control": "online_lr_control",
+        "trajectory_average": "trajectory_average",
+        "trajectory_extrapolate": "trajectory_extrapolate",
     }
     shallow_score = (
         -parent_features["loss_slope"]
@@ -397,7 +406,7 @@ def _proposals(
     if nearest is not None:
         proposal_schedules["history_retrieval"] = nearest.selected_schedule
     proposals: list[Proposal] = []
-    for strategy in STRATEGIES:
+    for strategy in ALL_STRATEGIES:
         schedule = proposal_schedules[strategy]
         gain, uncertainty = _predicted_gain(
             schedule,
@@ -507,6 +516,56 @@ def _evaluate(
     return sum(losses) / len(losses)
 
 
+def _trajectory_snapshot_steps(campaign: CampaignConfig) -> tuple[int, ...]:
+    if campaign.trajectory_interval <= 0:
+        raise ValueError("trajectory_interval must be positive")
+    if campaign.trajectory_window <= 0:
+        raise ValueError("trajectory_window must be positive")
+    count = 2 * campaign.trajectory_window
+    first = campaign.prefix_steps - (count - 1) * campaign.trajectory_interval
+    if first <= 0:
+        raise ValueError(
+            "prefix_steps must contain two trajectory windows; increase prefix_steps "
+            "or reduce trajectory_interval/trajectory_window"
+        )
+    return tuple(
+        first + index * campaign.trajectory_interval for index in range(count)
+    )
+
+
+def _save_model_snapshot(
+    path: Path,
+    *,
+    model: DecoderLM,
+    step: int,
+    config_sha: str,
+    data_sha: str,
+) -> None:
+    payload = {
+        "metadata": {
+            "config_sha256": config_sha,
+            "data_sha256": data_sha,
+            "step": step,
+        },
+        "model": {
+            name: parameter.detach().cpu()
+            for name, parameter in model.named_parameters()
+        },
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+        torch.save(payload, temporary)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
+
+
 def _train_prefix(
     model: DecoderLM,
     optimizer: torch.optim.Optimizer,
@@ -514,7 +573,18 @@ def _train_prefix(
     target_config: Config,
     campaign: CampaignConfig,
     device: torch.device,
-) -> tuple[list[dict[str, Any]], float, int]:
+    *,
+    snapshot_steps: tuple[int, ...] = (),
+    snapshot_dir: Path | None = None,
+    config_sha: str | None = None,
+    data_sha: str | None = None,
+) -> tuple[list[dict[str, Any]], float, int, list[Path]]:
+    if snapshot_steps and snapshot_dir is None:
+        raise ValueError("snapshot_dir is required when snapshot_steps are provided")
+    if snapshot_steps and (config_sha is None or data_sha is None):
+        raise ValueError("snapshot hashes are required when snapshots are provided")
+    snapshot_lookup = set(snapshot_steps)
+    snapshots: list[Path] = []
     started = time.perf_counter()
     telemetry: list[dict[str, Any]] = []
     tokens = 0
@@ -532,14 +602,107 @@ def _train_prefix(
         )
         telemetry.append(current)
         tokens += consumed
+        step_number = step + 1
+        if step_number in snapshot_lookup:
+            path = snapshot_dir / f"step-{step_number:06d}.pt"
+            _save_model_snapshot(
+                path,
+                model=model,
+                step=step_number,
+                config_sha=config_sha,
+                data_sha=data_sha,
+            )
+            snapshots.append(path)
     _sync(device)
-    return telemetry, time.perf_counter() - started, tokens
+    return telemetry, time.perf_counter() - started, tokens, snapshots
 
 
 def _loss_slope(history: list[dict[str, Any]]) -> float:
     if len(history) < 2:
         return 0.0
     return (history[-1]["loss"] - history[0]["loss"]) / max(1, len(history) - 1)
+
+
+def _load_model_snapshot(
+    path: Path,
+    *,
+    config_sha: str,
+    data_sha: str,
+) -> tuple[dict[str, torch.Tensor], int]:
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ValueError(f"trajectory snapshot is missing metadata: {path}")
+    if metadata.get("config_sha256") != config_sha or metadata.get("data_sha256") != data_sha:
+        raise ValueError(f"trajectory snapshot provenance mismatch: {path}")
+    state = payload.get("model")
+    if not isinstance(state, dict):
+        raise ValueError(f"trajectory snapshot is missing model state: {path}")
+    return state, int(metadata["step"])
+
+
+@torch.no_grad()
+def _apply_trajectory_maneuver(
+    model: DecoderLM,
+    *,
+    strategy: str,
+    snapshots: tuple[Path, ...],
+    window: int,
+    alpha: float,
+    config_sha: str,
+    data_sha: str,
+) -> dict[str, Any]:
+    if strategy not in TRAJECTORY_STRATEGIES:
+        raise ValueError(f"unknown trajectory strategy: {strategy}")
+    if len(snapshots) != 2 * window:
+        raise ValueError("trajectory snapshots do not contain two complete windows")
+    if not math.isfinite(alpha):
+        raise ValueError("trajectory_alpha must be finite")
+
+    parameters = dict(model.named_parameters())
+    past = {name: torch.zeros_like(parameter) for name, parameter in parameters.items()}
+    recent = {name: torch.zeros_like(parameter) for name, parameter in parameters.items()}
+    snapshot_steps: list[int] = []
+    for index, path in enumerate(snapshots):
+        state, snapshot_step = _load_model_snapshot(
+            path, config_sha=config_sha, data_sha=data_sha
+        )
+        snapshot_steps.append(snapshot_step)
+        target = past if index < window else recent
+        for name, parameter in parameters.items():
+            value = state.get(name)
+            if value is None or value.shape != parameter.shape:
+                raise ValueError(f"trajectory snapshot is missing parameter {name}")
+            target[name].add_(value.to(device=parameter.device, dtype=parameter.dtype))
+        del state
+
+    energy = torch.zeros((), device=next(iter(parameters.values())).device, dtype=torch.float64)
+    parameter_count = 0
+    for name, parameter in parameters.items():
+        past[name].div_(window)
+        recent[name].div_(window)
+        if strategy == "trajectory_average":
+            candidate = recent[name]
+        else:
+            # Deliberate ceiling: a two-window secant is cheaper than full PCA over
+            # merged checkpoints; upgrade only if this leaves measurable signal.
+            candidate = recent[name] + alpha * (recent[name] - past[name])
+        delta = candidate - parameter
+        energy += delta.float().square().sum(dtype=torch.float64) / (
+            parameter.float().square().sum(dtype=torch.float64) + 1e-12
+        )
+        parameter.copy_(candidate)
+        parameter_count += parameter.numel()
+
+    return {
+        "kind": strategy,
+        "snapshot_steps": snapshot_steps,
+        "window": window,
+        "alpha": 0.0 if strategy == "trajectory_average" else alpha,
+        "energy": float(energy.item()),
+        "optimizer_state": "preserved",
+        "flops": 2.0 * parameter_count * len(snapshots),
+    }
 
 
 def _branch(
@@ -555,6 +718,7 @@ def _branch(
     code_sha: str,
     before: Observation,
     device: torch.device,
+    trajectory_snapshots: tuple[Path, ...] = (),
 ) -> tuple[Transition, dict[str, Any]]:
     model: DecoderLM | None = None
     optimizer: torch.optim.Optimizer | None = None
@@ -578,6 +742,25 @@ def _branch(
                 proposal, parent_features=before.features
             )
         runtime: dict[str, Any] = {"lr_multiplier": 1.0, "adapter_updates": 0}
+        maneuver: dict[str, Any] | None = None
+        intervention_loss: float | None = None
+        if proposal.strategy in TRAJECTORY_STRATEGIES:
+            maneuver = _apply_trajectory_maneuver(
+                model,
+                strategy=proposal.strategy,
+                snapshots=trajectory_snapshots,
+                window=campaign.trajectory_window,
+                alpha=campaign.trajectory_alpha,
+                config_sha=config_sha,
+                data_sha=data_sha,
+            )
+            intervention_loss = _evaluate(
+                model,
+                validation_values,
+                target_config=target_config,
+                campaign=campaign,
+                device=device,
+            )
         telemetry: list[dict[str, Any]] = []
         phase_metrics: list[dict[str, Any]] = [
             {
@@ -655,9 +838,12 @@ def _branch(
             campaign.immediate_steps if selected_schedule == "role_pulse" else 0,
         )
         parameter_count = sum(parameter.numel() for parameter in model.parameters())
-        evaluation_flops = 2.0 * parameter_count * target_config.batch_size * target_config.context * 3
+        evaluation_flops = 2.0 * parameter_count * target_config.batch_size * target_config.context * (
+            3 + int(intervention_loss is not None)
+        )
         driver_inference_flops = 64.0
         driver_update_flops = 1.0 if proposal.strategy == "online_lr_control" else 0.0
+        maneuver_flops = 0.0 if maneuver is None else float(maneuver["flops"])
         recovery_flops = _flops(
             target_config,
             model,
@@ -672,7 +858,7 @@ def _branch(
             tokens=before.tokens + target_tokens,
             loss=final_loss,
             quality=-final_loss,
-            compute_flops=target_flops + evaluation_flops,
+            compute_flops=target_flops + evaluation_flops + maneuver_flops,
             features={
                 "loss_slope": _loss_slope(telemetry),
                 "gradient_norm": telemetry[-1]["gradient_norm"],
@@ -685,6 +871,8 @@ def _branch(
             "role_pulse": 1.0,
             "open_loop": 2.0,
             "online_lr_control": 3.0,
+            "trajectory_average": 4.0,
+            "trajectory_extrapolate": 5.0,
         }
         transition = Transition(
             transition_id=f"{target_config.landscape}-{target_config.seed}:{proposal.strategy}",
@@ -701,7 +889,13 @@ def _branch(
                 },
             ),
             after=after,
-            compute_flops=target_flops + evaluation_flops + driver_inference_flops + driver_update_flops,
+            compute_flops=(
+                target_flops
+                + evaluation_flops
+                + maneuver_flops
+                + driver_inference_flops
+                + driver_update_flops
+            ),
             wall_seconds=wall_seconds,
             reward_task=parent_loss - final_loss,
             learning_progress=parent_loss - final_loss,
@@ -714,18 +908,22 @@ def _branch(
                     "uncertainty": proposal.uncertainty,
                     "predicted_final_loss": parent_loss - proposal.predicted_gain,
                 },
+                "maneuver": maneuver,
+                "intervention_loss": intervention_loss,
                 "horizon_metrics": phase_metrics,
                 "telemetry": telemetry,
                 "target_tokens": target_tokens,
                 "target_flops": target_flops,
                 "driver_inference_flops": driver_inference_flops,
                 "driver_update_flops": driver_update_flops,
+                "maneuver_flops": maneuver_flops,
                 "probe_flops": 0.0,
                 "recovery_flops": recovery_flops,
                 "evaluation_flops": evaluation_flops,
                 "driver_cost": {
                     "inference_flops": driver_inference_flops,
                     "update_flops": driver_update_flops,
+                    "maneuver_flops": maneuver_flops,
                     "probe_flops": 0.0,
                     "recovery_flops": recovery_flops,
                     "evaluation_flops": evaluation_flops,
@@ -744,6 +942,8 @@ def _branch(
             "predicted_final_loss": parent_loss - proposal.predicted_gain,
             "final_loss": final_loss,
             "gain": parent_loss - final_loss,
+            "intervention_loss": intervention_loss,
+            "maneuver": maneuver,
             "wall_seconds": wall_seconds,
             "target_flops": target_flops,
             "target_tokens": target_tokens,
@@ -960,8 +1160,19 @@ def _run_case(
     case_output.mkdir(parents=True, exist_ok=False)
     model, optimizer = _model_and_optimizer(target_config, device)
     stream = TokenStream(train_values)
-    prefix_telemetry, prefix_seconds, prefix_tokens = _train_prefix(
-        model, optimizer, stream, target_config, campaign, device
+    trajectory_enabled = any(strategy in TRAJECTORY_STRATEGIES for strategy in strategies)
+    snapshot_steps = _trajectory_snapshot_steps(campaign) if trajectory_enabled else ()
+    prefix_telemetry, prefix_seconds, prefix_tokens, trajectory_snapshots = _train_prefix(
+        model,
+        optimizer,
+        stream,
+        target_config,
+        campaign,
+        device,
+        snapshot_steps=snapshot_steps,
+        snapshot_dir=case_output / "trajectory",
+        config_sha=config_sha,
+        data_sha=data_sha,
     )
     prefix_loss = _evaluate(
         model,
@@ -1021,6 +1232,7 @@ def _run_case(
             code_sha=code_revision,
             before=before,
             device=device,
+            trajectory_snapshots=tuple(trajectory_snapshots),
         )
         archive.append(transition)
         branch_results.append(result)
@@ -1132,6 +1344,7 @@ def _run_case(
         "config_sha256": config_sha,
         "parent_checkpoint_sha256": parent.sha256,
         "parent_checkpoint": str(parent.path),
+        "trajectory_snapshots": [str(path) for path in trajectory_snapshots],
         "prefix_seconds": prefix_seconds,
         "prefix_tokens": prefix_tokens,
         "prefix_loss": prefix_loss,
@@ -1199,12 +1412,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         pulse_mlp=args.pulse_mlp,
         open_loop_start=args.open_loop_start,
         open_loop_end=args.open_loop_end,
+        trajectory_interval=args.trajectory_interval,
+        trajectory_window=args.trajectory_window,
+        trajectory_alpha=args.trajectory_alpha,
         amp=not args.no_amp,
     )
     if campaign.width % campaign.heads:
         raise ValueError("width must be divisible by heads")
     if campaign.validation_batches <= 0:
         raise ValueError("validation_batches must be positive")
+    if campaign.trajectory_interval <= 0 or campaign.trajectory_window <= 0:
+        raise ValueError("trajectory interval and window must be positive")
+    if not math.isfinite(campaign.trajectory_alpha):
+        raise ValueError("trajectory_alpha must be finite")
     if not (
         0 < campaign.immediate_steps <= campaign.recovery_steps < campaign.final_steps
     ):
@@ -1351,7 +1571,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "data_sha256": case["data_sha256"],
                 "config_sha256": case["config_sha256"],
                 "parent_checkpoint_sha256": case["parent_checkpoint_sha256"],
-                "parent_checkpoint": case["parent_checkpoint"],
+                    "parent_checkpoint": case["parent_checkpoint"],
+                    "trajectory_snapshots": case["trajectory_snapshots"],
                 "target_parameters": case["target_parameters"],
             }
             for case in cases
@@ -1382,7 +1603,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--landscape", action="append", choices=LANDSCAPES)
     parser.add_argument("--seed", action="append", type=int)
-    parser.add_argument("--strategy", action="append", choices=STRATEGIES)
+    parser.add_argument("--strategy", action="append", choices=ALL_STRATEGIES)
     parser.add_argument("--width", type=int, default=CampaignConfig.width)
     parser.add_argument("--layers", type=int, default=CampaignConfig.layers)
     parser.add_argument("--heads", type=int, default=CampaignConfig.heads)
@@ -1403,6 +1624,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pulse-mlp", type=float, default=CampaignConfig.pulse_mlp)
     parser.add_argument("--open-loop-start", type=float, default=CampaignConfig.open_loop_start)
     parser.add_argument("--open-loop-end", type=float, default=CampaignConfig.open_loop_end)
+    parser.add_argument(
+        "--trajectory-interval", type=int, default=CampaignConfig.trajectory_interval
+    )
+    parser.add_argument(
+        "--trajectory-window", type=int, default=CampaignConfig.trajectory_window
+    )
+    parser.add_argument(
+        "--trajectory-alpha", type=float, default=CampaignConfig.trajectory_alpha
+    )
     parser.add_argument("--no-amp", action="store_true")
     parser.add_argument("--allow-small-target", action="store_true")
     parser.add_argument("--allow-dirty", action="store_true")

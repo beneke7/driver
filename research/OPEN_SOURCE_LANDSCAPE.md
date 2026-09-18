@@ -70,6 +70,31 @@ cannot replace branches collected with this repository's exact target loop.
    branch boundaries. Weight-only public checkpoints are not enough for causal
    jump evaluation.
 
+## Trajectory-collapse route
+
+Recent checkpoint-merging work is the strongest low-complexity precedent for
+the current long-horizon hypothesis. [Checkpoint Merging via Bayesian
+Optimization](https://arxiv.org/abs/2403.19390) reduces a pairwise merge to a
+one-dimensional interpolation weight selected against a held-out set.
+[Model Merging in Pre-training](https://arxiv.org/abs/2505.12082) studies
+merging during pretraining at substantially larger scales and reports gains
+from constant-learning-rate trajectories. [Extra-Merge](https://arxiv.org/abs/2605.26484)
+reports a late-training rank-1 structure after averaging checkpoints and uses
+an extrapolation direction; its GPT-2 and LLaMA experiments use AdamW and its
+appendix also tests Muon. [Mashup Learning](https://github.com/2son1a/mashup-learning)
+is an openly released, more transfer-oriented implementation that selects and
+merges historical checkpoints before a new adaptation run.
+
+These results do not establish a skip of general pretraining, and several
+protocols use validation-guided merge weights. We therefore start with two
+causal open-loop actions in the existing campaign: uniform averaging of a
+recent window, and a two-window secant extrapolation. The latter is a
+deliberately cheaper approximation to Extra-Merge's PCA-over-merged-checkpoints
+step. It records normalized intervention energy and preserves AdamW state so
+state inconsistency is visible rather than silently corrected. Only after a
+long-run endpoint or post-recovery slope signal appears should we add a full
+PCA action, state correction, or a learned selector.
+
 ## What the sources do and do not establish
 
 NiNo reports future-parameter prediction from a short history and applies a

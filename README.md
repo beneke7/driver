@@ -123,6 +123,22 @@ curves. The completed development run produced 54/54 branch records with zero
 failures. It is calibration evidence, not the five-landscape promotion gate;
 see [research/DECODER_CAMPAIGN.md](research/DECODER_CAMPAIGN.md).
 
+The long-horizon trajectory screen adds two explicit open-loop actions. They
+save eight model-only snapshots during the prefix, then compare recent-window
+averaging with a two-window secant extrapolation while preserving AdamW state:
+
+```bash
+python3 -m driver.decoder_campaign \
+  --output runs/trajectory-screen \
+  --landscape text_shard --seed 0 \
+  --strategy noop --strategy trajectory_average \
+  --strategy trajectory_extrapolate \
+  --prefix-steps 256 --trajectory-interval 32
+```
+
+Use a versioned real-data stream and a 70–160M target for an interpretable
+long-run result; the tiny synthetic command above is only a plumbing check.
+
 Run it with:
 
 ```bash

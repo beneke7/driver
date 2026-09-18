@@ -58,6 +58,8 @@ data interval. Keep the action set small:
 - `structured_pulse`: a normalized role/block displacement with explicit
   energy and direction;
 - `secant_jump`: a checkpoint-history extrapolation baseline;
+- `trajectory_average`: a recent-checkpoint low-pass baseline;
+- `trajectory_extrapolate`: a two-window secant over recent checkpoint means;
 - `recovery`: damping, clipping, or optimizer-state correction applied only
   under a declared failure rule.
 
@@ -76,6 +78,12 @@ For every action, record optimizer-state handling, skipped/consumed tokens,
 the exact data cursor, immediate outcome, recovery outcome, and long-run
 continuation. A branch is invalid if it cannot be resumed from its checkpoint
 with the same RNG, optimizer, scaler, and data state.
+
+The first trajectory implementation intentionally uses two fixed windows rather
+than a full parameter-space PCA. This keeps the action cheap and makes the
+mechanism falsifiable; if it shows a long-run signal, compare it with the
+PCA-over-merged-checkpoints construction in [Extra-Merge](https://arxiv.org/abs/2605.26484)
+before adding a learned controller.
 
 ## Matched long-run experiment
 
