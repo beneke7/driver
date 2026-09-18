@@ -251,3 +251,16 @@ versus `1.70629/1.58843`). The current action should therefore remain an
 endpoint shadow baseline. The next driver work should learn when to expose or
 reject such a correction, with a cost-to-target evaluator, rather than simply
 making the correction more aggressive.
+
+Post-hoc action-size and window scans on the same saved FineWeb-Edu trajectories
+reinforce that boundary. With the latest two-window average as `alpha=0`, the
+final losses for extrapolation alphas `0.0625`, `0.125`, `0.25`, `0.5`, `1.0`,
+and `2.0` were respectively `1.51145`, `1.51360`, `1.52095`, `1.55005`,
+`1.70077`, and `2.59727` on seed 0; seed 1 gave `1.47722`, `1.47941`,
+`1.48612`, `1.50978`, `1.61432`, and `2.12693`. The latest two snapshots
+were also the best fixed window: losses for windows 1/2/3/4 were
+`1.52901/1.51030/1.51928/1.52902` on seed 0 and
+`1.49769/1.47577/1.48266/1.48948` on seed 1. The initial action set can
+therefore be reduced to no-op, window-2 shadow average, and a deliberately
+bounded small extrapolation control; larger pulses have a clear, measurable
+ceiling on this data.
