@@ -1,0 +1,27 @@
+{
+  "schema": "landscape-driver.data-manifest.v1",
+  "dataset": "HuggingFaceFW/fineweb-edu",
+  "config": "default",
+  "split": "train",
+  "source": "https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu",
+  "rows_api": "https://datasets-server.huggingface.co/rows",
+  "retrieved_utc": "2026-09-19",
+  "license_note": "Use the upstream dataset card and terms; this manifest does not change them.",
+  "representation": "raw UTF-8 bytes, vocabulary size 256",
+  "selection": "Rows starting at offset 0, fetched through the official rows API; validation is a later byte-disjoint slice of the same fetched stream.",
+  "files": [
+    {
+      "local": "data/raw/FineWeb-Edu-train-40m.txt",
+      "bytes": 41942542,
+      "sha256": "0518fdac79f1612cbb3d68016d4435a01eba5d9eecb417a3d582849fe2b41c6d",
+      "selection": "first clean document-boundary slice near 40 MiB"
+    },
+    {
+      "local": "data/raw/FineWeb-Edu-valid-8m.txt",
+      "bytes": 8389517,
+      "sha256": "3c79cff4ab30b1db50bcf6d7359296fb308a9c2a41adc94f8a154965cd25b36d",
+      "selection": "next clean document-boundary slice near 8 MiB"
+    }
+  ],
+  "boundary": "Changed-distribution transfer screen only; this small byte-level slice is not a broad FineWeb pretraining claim."
+}
