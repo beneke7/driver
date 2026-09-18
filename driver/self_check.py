@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+import math
 from pathlib import Path
 
 from .core import (
@@ -60,6 +61,13 @@ class ToyTarget:
 
 
 def main() -> None:
+    try:
+        Action("correction", parameters={"strength": math.nan})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("non-finite action parameters must be rejected")
+
     with tempfile.TemporaryDirectory() as directory:
         archive = Archive(Path(directory) / "transitions.jsonl")
         controller = OnlineActionStats(

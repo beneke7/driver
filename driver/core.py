@@ -96,8 +96,10 @@ class Observation:
         if not isinstance(self.tokens, int) or isinstance(self.tokens, bool) or self.tokens < 0:
             raise ValueError("observation tokens must be a non-negative integer")
         for name in ("loss", "quality", "compute_flops"):
-            _finite(getattr(self, name), f"observation {name}")
-        _non_negative(self.risk, "observation risk")
+            object.__setattr__(
+                self, name, _finite(getattr(self, name), f"observation {name}")
+            )
+        object.__setattr__(self, "risk", _non_negative(self.risk, "observation risk"))
         features = dict(self.features)
         for key, value in features.items():
             if not isinstance(key, str) or not key:
@@ -146,10 +148,18 @@ class Outcome:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        _non_negative(self.compute_flops, "outcome compute_flops")
-        _non_negative(self.wall_seconds, "outcome wall_seconds")
-        _finite(self.reward_task, "outcome reward_task")
-        _finite(self.learning_progress, "outcome learning_progress")
+        object.__setattr__(
+            self, "compute_flops", _non_negative(self.compute_flops, "outcome compute_flops")
+        )
+        object.__setattr__(
+            self, "wall_seconds", _non_negative(self.wall_seconds, "outcome wall_seconds")
+        )
+        object.__setattr__(self, "reward_task", _finite(self.reward_task, "outcome reward_task"))
+        object.__setattr__(
+            self,
+            "learning_progress",
+            _finite(self.learning_progress, "outcome learning_progress"),
+        )
         if not isinstance(self.accepted, bool) or not isinstance(self.done, bool):
             raise ValueError("outcome accepted and done must be booleans")
         if self.failure is not None and not isinstance(self.failure, str):
@@ -184,10 +194,28 @@ class Transition:
             not isinstance(self.parent_id, str) or not self.parent_id.strip()
         ):
             raise ValueError("parent_id must be a non-empty string or null")
-        _non_negative(self.compute_flops, "transition compute_flops")
-        _non_negative(self.wall_seconds, "transition wall_seconds")
-        _finite(self.reward_task, "transition reward_task")
-        _finite(self.learning_progress, "transition learning_progress")
+        if not isinstance(self.before, Observation):
+            raise TypeError("before must be an Observation")
+        if not isinstance(self.action, Action):
+            raise TypeError("action must be an Action")
+        if self.after is not None and not isinstance(self.after, Observation):
+            raise TypeError("after must be an Observation or null")
+        object.__setattr__(
+            self,
+            "compute_flops",
+            _non_negative(self.compute_flops, "transition compute_flops"),
+        )
+        object.__setattr__(
+            self,
+            "wall_seconds",
+            _non_negative(self.wall_seconds, "transition wall_seconds"),
+        )
+        object.__setattr__(self, "reward_task", _finite(self.reward_task, "transition reward_task"))
+        object.__setattr__(
+            self,
+            "learning_progress",
+            _finite(self.learning_progress, "transition learning_progress"),
+        )
         if not isinstance(self.accepted, bool):
             raise ValueError("transition accepted must be a boolean")
         if self.failure is not None and not isinstance(self.failure, str):
@@ -294,10 +322,10 @@ class ActionEstimate:
     cost_flops: float = 0.0
 
     def __post_init__(self) -> None:
-        _finite(self.predicted_gain, "predicted_gain")
-        _non_negative(self.uncertainty, "uncertainty")
-        _non_negative(self.risk, "risk")
-        _non_negative(self.cost_flops, "cost_flops")
+        object.__setattr__(self, "predicted_gain", _finite(self.predicted_gain, "predicted_gain"))
+        object.__setattr__(self, "uncertainty", _non_negative(self.uncertainty, "uncertainty"))
+        object.__setattr__(self, "risk", _non_negative(self.risk, "risk"))
+        object.__setattr__(self, "cost_flops", _non_negative(self.cost_flops, "cost_flops"))
 
 
 class Selector:
