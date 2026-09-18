@@ -46,12 +46,21 @@ structured correction. The correction first tries a diagonal probe and only
 falls back to a full local Hessian probe when the measured response requires
 it. Every probe and solve is charged in the estimated-work ledger.
 
-Run it with the existing CUDA environment:
+Set up the project-local CUDA environment:
 
 ```bash
-/home/v/proj/bene/aerial-drop-tdk/.venv/bin/python \
-  -m driver.quadratic_benchmark --output runs/quadratic-first
+uv sync
 ```
+
+Run it with that environment:
+
+```bash
+.venv/bin/python -m driver.quadratic_benchmark \
+  --output runs/quadratic-first
+```
+
+Evidence directories are append-safe: use a fresh `--output` for every run;
+the benchmark refuses to append duplicate transition IDs to an existing run.
 
 This is a scoped optimization-track mechanism test, not evidence of a
 language-model or general-training 10× gain. The first sweep reaches a hard

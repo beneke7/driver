@@ -381,7 +381,12 @@ def write_evidence(
     max_steps: int,
 ) -> dict[str, Any]:
     output.mkdir(parents=True, exist_ok=True)
-    archive = Archive(output / "transitions.jsonl")
+    archive_path = output / "transitions.jsonl"
+    if archive_path.exists():
+        raise FileExistsError(
+            f"evidence directory already contains {archive_path}; choose a fresh --output"
+        )
+    archive = Archive(archive_path)
     rows: list[dict[str, Any]] = []
     for index, case in enumerate(suite):
         baseline_step = int(baseline_steps[index].item())
