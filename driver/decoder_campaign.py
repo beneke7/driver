@@ -53,7 +53,12 @@ STRATEGIES = (
     "history_retrieval",
     "online_lr_control",
 )
-TRAJECTORY_STRATEGIES = ("trajectory_average", "trajectory_extrapolate")
+TRAJECTORY_STRATEGIES = (
+    "trajectory_average",
+    "trajectory_extrapolate",
+    "trajectory_average_reset",
+    "trajectory_extrapolate_reset",
+)
 ALL_STRATEGIES = STRATEGIES + TRAJECTORY_STRATEGIES
 QUALITY_FACTORS = (0.995, 0.99, 0.98)
 
@@ -392,6 +397,8 @@ def _proposals(
         "online_lr_control": "online_lr_control",
         "trajectory_average": "trajectory_average",
         "trajectory_extrapolate": "trajectory_extrapolate",
+        "trajectory_average_reset": "trajectory_average_reset",
+        "trajectory_extrapolate_reset": "trajectory_extrapolate_reset",
     }
     shallow_score = (
         -parent_features["loss_slope"]
@@ -652,7 +659,11 @@ def _apply_trajectory_maneuver(
     config_sha: str,
     data_sha: str,
 ) -> dict[str, Any]:
-    if strategy not in TRAJECTORY_STRATEGIES:
+    base_strategy = strategy.removesuffix("_reset")
+    if strategy not in TRAJECTORY_STRATEGIES or base_strategy not in {
+        "trajectory_average",
+        "trajectory_extrapolate",
+    }:
         raise ValueError(f"unknown trajectory strategy: {strategy}")
     if len(snapshots) != 2 * window:
         raise ValueError("trajectory snapshots do not contain two complete windows")
@@ -672,7 +683,7 @@ def _apply_trajectory_maneuver(
             name: torch.zeros_like(parameter, device="cpu", dtype=torch.float32)
             for name, parameter in parameters.items()
         }
-        if strategy == "trajectory_extrapolate"
+        if base_strategy == "trajectory_extrapolate"
         else None
     )
     snapshot_steps: list[int] = []
@@ -697,7 +708,7 @@ def _apply_trajectory_maneuver(
     for name, parameter in parameters.items():
         recent[name].div_(window)
         candidate_cpu = recent[name]
-        if strategy == "trajectory_average":
+        if base_strategy == "trajectory_average":
             pass
         else:
             # Deliberate ceiling: a two-window secant is cheaper than full PCA over
@@ -717,11 +728,23 @@ def _apply_trajectory_maneuver(
         "kind": strategy,
         "snapshot_steps": snapshot_steps,
         "window": window,
-        "alpha": 0.0 if strategy == "trajectory_average" else alpha,
+        "alpha": 0.0 if base_strategy == "trajectory_average" else alpha,
         "energy": float(energy.item()),
         "optimizer_state": "preserved",
         "flops": 2.0 * parameter_count * len(snapshots),
     }
+
+
+@torch.no_grad()
+def _reset_adam_moments(optimizer: torch.optim.Optimizer) -> int:
+    reset_count = 0
+    for state in optimizer.state.values():
+        for name in ("exp_avg", "exp_avg_sq"):
+            value = state.get(name)
+            if value is not None:
+                value.zero_()
+                reset_count += value.numel()
+    return reset_count
 
 
 def _branch(
@@ -773,6 +796,11 @@ def _branch(
                 config_sha=config_sha,
                 data_sha=data_sha,
             )
+            if proposal.strategy.endswith("_reset"):
+                reset_count = _reset_adam_moments(optimizer)
+                maneuver["optimizer_state"] = "zero_moments"
+                maneuver["reset_moment_values"] = reset_count
+                maneuver["flops"] += 2.0 * reset_count
             intervention_loss = _evaluate(
                 model,
                 validation_values,
@@ -892,6 +920,8 @@ def _branch(
             "online_lr_control": 3.0,
             "trajectory_average": 4.0,
             "trajectory_extrapolate": 5.0,
+            "trajectory_average_reset": 6.0,
+            "trajectory_extrapolate_reset": 7.0,
         }
         transition = Transition(
             transition_id=f"{target_config.landscape}-{target_config.seed}:{proposal.strategy}",
