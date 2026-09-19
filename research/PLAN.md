@@ -555,3 +555,19 @@ This is a useful negative control: current AdamW moments alone do not supply a
 robust durable update direction. The next action, if pursued, must be a new
 one-real-gradient skip with explicit data-cursor and optimizer-state
 advancement; it requires its own preregistration and conservative accounting.
+
+### One-gradient probe jump (2026-09-20)
+
+The preregistered real-gradient skip pilot also failed cleanly. On three fresh
+FineWeb-Edu 85M roots, a one-gradient extrapolation over 31 skipped steps
+produced mean immediate/recovery/final deltas of `+1.646684`, `+0.096672`, and
+`+0.020353`; all 3/3 branches failed the durable-safety screen and final
+margin. The physical FLOP ratio was `1.1852x`, but conservative accounting of
+the skipped work was `0.9948x`. The optimizer step, moments, cursor, and
+provenance were advanced explicitly, so this closes the current short-horizon
+jump family rather than exposing an accounting bug. See
+[`GRADIENT_PROBE_JUMP_RESULTS.md`](GRADIENT_PROBE_JUMP_RESULTS.md).
+
+Do not tune this action or train a selector around it. The next work must
+change the causal action family or improve state/action observability before
+another skip experiment.
