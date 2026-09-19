@@ -391,6 +391,23 @@ The next causal collection should increase within-regime action coverage and
 hold out complete roots before fitting a classifier. Do not use the current
 label imbalance to justify a larger model or a planner.
 
+### Oracle ceiling decision (2026-09-19)
+
+The transport/data oracle ladder has now been consolidated in
+[`ORACLE_CEILING_DECISION.md`](ORACLE_CEILING_DECISION.md). No tested causal
+or diagnostic transport action has a large conservative ceiling: complete
+future state is approximately `1.000145x` after charging state-creation work,
+role-wise future copies are 0/20 durable, the coarse data switch is 0/4, and
+the learned action model remains at 0/2 final top-1 agreement on its supported
+holdout. The fixed shadow stop remains a roughly `1.13x` mechanism baseline,
+not a learned driver.
+
+This is a no-go for the current transport hypothesis as a 10x mechanism. Do
+not scale the steerer or add planning/RL. Any continuation must introduce a
+new predeclared causal action family—task-aligned in-domain allocation or
+few-shot initialization/seed screening—and first clear the small oracle
+ceiling rule in the decision document.
+
 ### Passive trajectory corpus and phase model (2026-09-19)
 
 The first normalized passive corpus now contains 17 complete local AdamW roots
