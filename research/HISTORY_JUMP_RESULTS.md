@@ -784,3 +784,10 @@ from `1.34515` to `1.34124`. Both saved about `28%` of branch wall time and
 `33.3%` of branch training FLOPs. Including the shared prefix, each is about a
 `10%` end-to-end wall reduction. This is now a 3/3 85M FineWeb screen, not yet
 a cross-data or cross-width result.
+
+The changed-data gate was run with the same Muon recipe on TinyStories. The
+full no-op reached `0.76665`; the exact same-parent 512-step shadow fork
+reached `0.77772`, a degradation of `0.01107` despite the shorter branch.
+The shortcut is therefore not a universal training accelerator. Any future
+driver must gate it on observed regime and trajectory features, with the
+full-length baseline as the safe fallback.
