@@ -82,6 +82,35 @@ backbone, or recursive online core update is admissible before that gate is
 met on complete held-out roots. Imagined transitions are proposals only and
 never evidence.
 
+### Actionability labels
+
+Before fitting a productive-region model, derive labels only from matched
+causal atlas rows. Use an absolute validation-loss tolerance of `1e-3`, fixed
+before label generation. For a non-noop action with finite observations at all
+three horizons:
+
+- `dangerous`: the branch fails/non-finite or its final delta versus noop is
+  greater than `1e-3`;
+- `jumpable`: it is `productive` and reaches the noop final loss by the
+  immediate or recovery horizon with lower charged wall time than the noop
+  final endpoint;
+- `productive`: its final delta is at most `-1e-3` and no observed horizon
+  delta is greater than `1e-3`;
+- `recoverable`: its final delta is at most `1e-3`, but an earlier observed
+  delta is greater than `1e-3`;
+- `neutral`: finite, non-noop evidence that matches none of the above;
+- `stalled`: no finite final outcome is available without a declared branch
+  failure. A failed branch remains `dangerous` rather than being relabeled
+  as a benign stall.
+
+`noop_baseline` is a separate label for the ordinary continuation and is not
+treated as a positive action. `jumpable` requires an observed, charged
+early-to-final comparison; a hindsight checkpoint or an uncharged data skip
+cannot receive that label. The labeler emits `unresolved` metadata when a
+required horizon is missing and never creates a counterfactual outcome.
+Labels are development artifacts until an action-conditioned model beats the
+action-only prior on complete held-out roots with support calibration.
+
 ## Capability and cost contract
 
 For every held-out case define three thresholds before reading candidate
