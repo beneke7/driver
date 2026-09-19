@@ -807,3 +807,23 @@ lower end-to-end wall time, with `33.4%` fewer branch training FLOPs and a
 better endpoint. The current fixed heuristic therefore passes 4/4 FineWeb
 roots across 85M and 139M, but its TinyStories failure still requires a
 regime-aware gate before any broader claim.
+
+### Muon equal-budget controls on fresh roots
+
+To separate the endpoint primitive from the early-stop accounting, a fresh
+two-seed campaign ran `noop` and `trajectory_shadow_average` from matched
+85M Muon parents on FineWeb-Edu seeds 6 and 9. Both branches consumed the
+same 1536-step prefix and 512-step continuation; the shadow action therefore
+cannot claim a speedup in this screen.
+
+| Seed | No-op final | Shadow final | Final loss delta | No-op end-to-end | Shadow end-to-end |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 6 | `1.38397` | `1.34408` | `-0.03989` | `183.37s` | `184.08s` |
+| 9 | `1.38184` | `1.34095` | `-0.04089` | `183.74s` | `184.49s` |
+
+The equal-budget result replicates a durable final-loss improvement from the
+two-window shadow merge, but adds roughly `0.4%` wall time and a small merge
+FLOP cost. It is useful response-atlas data, not evidence of a training
+efficiency gain. The earlier approximately `10%` end-to-end reduction comes
+only from replacing a 768-step continuation with a 512-step continuation and
+must continue to be reported as a separate early-stop hypothesis.

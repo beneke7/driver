@@ -91,3 +91,17 @@ matched campaign transitions, followed by a held-out action-conditioned
 predictor. A policy is not promoted until it beats the action-only prior on
 fresh roots; the fixed shadow baseline remains a mechanism control, not a
 driver claim.
+
+### Current atlas checkpoint (2026-09-19)
+
+The first normalized AdamW atlas contains 61 matched parent groups and 213
+observed action rows across the historical decoder campaigns. It preserves
+immediate, recovery, and final outcomes, matched no-op deltas, risk flags,
+provenance, and additive cost components. A history-conditioned selector was
+trained on complete FineWeb roots and evaluated on four complete TinyStories
+roots. Its raw final-loss RMSE was `0.0321`, but support calibration rejected
+all four transfer deployments; the safe policy selected no-op every time.
+The action-only prior was better than that abstaining policy on this small
+holdout, so there is no justification yet for a planner or online learner.
+The next atlas model must first beat that prior on held-out roots within a
+single data regime, then survive the changed-data gate.
