@@ -335,19 +335,24 @@ This is evidence for long-horizon action labels and state coupling, not a
 reason to scale a role-wise steerer. See
 [`TRAJECTORY_TRANSPORT_RESULTS.md`](TRAJECTORY_TRANSPORT_RESULTS.md).
 
-The remaining Phase-2 transport check is the pre-parent low-rank oracle. It
-uses nested secant bases of ranks 1/2/3 from steps 1152--1536, fits hindsight
-coefficients to the step-2048 future delta, preserves parent AdamW state, and
-charges the skipped exposure and projection work. It is diagnostic only; a
-weak result closes this basis family before any learned transport model is
-scaled. See the exact roster and accounting in
-[`DECODER_DRIVER_PREREGISTRATION.md`](DECODER_DRIVER_PREREGISTRATION.md).
+### Pre-parent low-rank oracle (2026-09-19)
 
-The next admissible rung is a cheap actionability/data-work oracle using real
-branches and explicit cost, or a causal transport probe that predicts both
-parameter and optimizer-state changes. Do not add planner, dreaming, PPO/SAC,
-or a larger pretrained controller until one of those baselines demonstrates
-held-out durable action ranking within support.
+The remaining Phase-2 transport check is complete. Nested pre-parent secant
+bases of ranks 1/2/3 were fit to the hindsight step-2048 displacement, with
+parent AdamW state preserved, skipped exposure charged, and 128-step recovery
+plus final evaluation. Across nine complete roots, all three ranks produced
+0/27 durable endpoint passes. Mean final deltas were `+0.04784`, `+0.04309`,
+and `+0.04620` for ranks 1, 2, and 3; rank 3 still left `0.91867` of future
+displacement energy outside the span. The ideal `1.2856x` FLOP ratio collapses
+to `1.00x` when the skipped work is charged. See
+[`LOW_RANK_TRANSPORT_RESULTS.md`](LOW_RANK_TRANSPORT_RESULTS.md).
+
+This closes the pre-parent low-rank basis family as a transport route. The
+next admissible rung is a new predeclared causal action family with a common
+task objective and a conservative ceiling, or a rigorously instrumented
+action-conditioned atlas that models optimizer and data state jointly. Do not
+add a planner, dreaming, PPO/SAC, or a larger pretrained controller until a
+new action baseline demonstrates held-out durable ranking within support.
 
 ### Naive data-allocation oracle (2026-09-19)
 

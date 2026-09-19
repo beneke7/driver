@@ -36,6 +36,7 @@ from .trajectory_transport_oracle import (
 
 
 DEFAULT_BASIS_STEPS = (1152, 1280, 1408)
+THRESHOLD_FACTORS = (0.995, 0.99, 0.98)
 
 
 def _history_path(case: dict[str, Any], step: int) -> Path:
@@ -265,6 +266,20 @@ def _run_case(
             value > max(singular_values, default=0.0) * 1e-4
             for value in singular_values
         )
+        parent_loss = float(source_transition["before"]["loss"])
+        metrics = result.get("phase_metrics", ())
+        result["quality_thresholds"] = {}
+        for factor in THRESHOLD_FACTORS:
+            threshold = parent_loss * factor
+            stable_phase = None
+            for index, metric in enumerate(metrics):
+                if all(float(row["loss"]) <= threshold for row in metrics[index:]):
+                    stable_phase = metric["name"]
+                    break
+            result["quality_thresholds"][str(factor)] = {
+                "threshold": threshold,
+                "stable_phase": stable_phase,
+            }
         result["projection_seconds"] = projection_seconds
         result["projection_flops"] = projection_flops
         if result.get("failed"):
@@ -318,6 +333,7 @@ def _self_check() -> None:
     assert abs(singular_values[0] - math.sqrt(6.0)) < 1e-12
     assert condition_number == 1.0
     assert DEFAULT_BASIS_STEPS == (1152, 1280, 1408)
+    assert THRESHOLD_FACTORS == (0.995, 0.99, 0.98)
     assert set(TRANSPORT_ROLES) == {"embedding", "attention", "mlp", "norm", "head"}
     print("trajectory low-rank oracle self-check: ok")
 
@@ -360,6 +376,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "oracle_only": True,
         "hypothesis": "pre-parent update geometry contains a useful low-rank approximation to a future training displacement",
         "basis_steps": list(basis_steps),
+        "threshold_factors": list(THRESHOLD_FACTORS),
         "future_step": args.future_step,
         "recovery_after": args.recovery_after,
         "cursor_policy": "skip",
