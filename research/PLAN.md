@@ -224,3 +224,28 @@ and the safe selector chose no-op on both held-out roots, so this is an
 observability/calibration improvement with a known ceiling, not evidence for
 state-dependent control. Keep the support gate and do not add more pulse
 variants.
+
+### Timing-conditioned shadow early-stop screen (2026-09-19)
+
+The existing two-window shadow merge was measured at parent steps 768, 1280,
+and 1792 on fresh 85M FineWeb-Edu seeds 18--20. Mean equal-budget final
+deltas were `-0.02837`, `-0.05492`, and `-0.02809`, respectively; the middle
+parent is the strongest but all nine branches were positive. A separately
+charged 512-step shadow continuation from parent step 1280 reached the matched
+768-step noop endpoint on all three FineWeb seeds, with about `11.6--11.8%`
+lower end-to-end wall time and `7.7%` lower end-to-end estimated FLOPs.
+
+The same protocol transferred to TinyStories seeds 6--8: equal-budget final
+deltas were `-0.05063`, `-0.04803`, and `-0.05095`, and the 512-step candidate
+beat the full noop endpoint by `0.0234--0.0277` with about `11.9%` lower wall
+and `7.7%` lower charged FLOPs. This is a fixed-mechanism baseline at roughly
+`1.13x` wall efficiency, not a contract-valid 10x claim: it uses one target
+width, one threshold, two data sources, and a fixed timing rule.
+
+The timing atlas model ranked the final shadow action correctly on all three
+leave-one-seed-out FineWeb splits. FineWeb-to-TinyStories ranking was also
+correct, but the support gate abstained on all three changed-data roots, so
+the learned state geometry has not transferred. Promote the fixed rule only as
+an audited baseline; next test the same early-stop rule at the 139M width
+holdout, then add duration/cost to the action-conditioned gate. Do not add a
+larger steerer yet.

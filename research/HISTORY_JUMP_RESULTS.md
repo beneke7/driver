@@ -827,3 +827,47 @@ FLOP cost. It is useful response-atlas data, not evidence of a training
 efficiency gain. The earlier approximately `10%` end-to-end reduction comes
 only from replacing a 768-step continuation with a 512-step continuation and
 must continue to be reported as a separate early-stop hypothesis.
+
+### Timing-conditioned shadow early-stop transfer
+
+The next screen measured the same two-window `trajectory_shadow_average` at
+three parent positions on fresh 85M FineWeb-Edu seeds 18--20. The equal-budget
+final deltas (shadow minus noop) were:
+
+| Parent step | Seed 18 | Seed 19 | Seed 20 | Mean |
+| ---: | ---: | ---: | ---: | ---: |
+| 768 | `-0.03290` | `-0.02994` | `-0.02227` | `-0.02837` |
+| 1280 | `-0.05512` | `-0.05669` | `-0.05295` | `-0.05492` |
+| 1792 | `-0.03057` | `-0.02628` | `-0.02743` | `-0.02809` |
+
+The response is therefore timing-conditioned: step 1280 is the strongest
+screened parent, while the merge remains positive at the earlier and later
+parents. This is a useful state variable for a timing gate, not evidence that
+the merge itself skips work.
+
+At parent step 1280, a candidate branch stopped after 512 continuation steps
+and then exposed the shadow endpoint; its matched noop reference continued for
+768 steps. All six fresh branches (three per data source) beat the full noop
+endpoint:
+
+| Data source | Seeds | Candidate final delta vs full noop | End-to-end wall | End-to-end charged FLOPs |
+| --- | --- | --- | ---: | ---: |
+| FineWeb-Edu | 18--20 | `-0.0128` to `-0.0081` (3/3) | `11.6--11.8%` lower | about `7.7%` lower |
+| TinyStories | 6--8 | `-0.0277` to `-0.0234` (3/3) | about `11.9%` lower | about `7.7%` lower |
+
+The branch-only training FLOP reduction is about one third, but the shared
+prefix dominates end-to-end cost. The accounting includes the shadow merge and
+additional evaluation; no training data is silently skipped. A normal TinyStories
+attempt hit the known host-level PyTorch/CUDA `SIGSEGV` before a manifest was
+written and is excluded. The synchronous `CUDA_LAUNCH_BLOCKING=1` retry
+completed all six branches and is the authoritative result.
+
+This is the strongest current fixed mechanism: a narrow, two-data-source,
+three-seed-per-source cost-to-quality result at roughly `1.13x` wall efficiency,
+not a 10x result and not yet a capability-suite promotion. The timing-grid
+atlas model ranked the final shadow action correctly on all three leave-one-seed
+out FineWeb splits. When trained on FineWeb and evaluated on TinyStories, it
+also ranked shadow correctly but its support gate abstained on all three roots
+(support distance about `21.7` versus radius `6.0`). The fixed action transfers;
+the learned state geometry does not yet. Keep no-op as the fallback and test a
+width holdout before adding a larger steerer.
