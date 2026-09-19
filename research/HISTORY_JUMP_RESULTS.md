@@ -407,8 +407,8 @@ global steps `1792`, `1920`, `2048`, and `2176` where available. A standardized
 ridge predictor with a leave-one-seed-out split was used as the deliberately
 cheap gate. With a low threshold it attempted an early `2048` stop and failed
 on one fresh seed; with a conservative `0.005` predicted-gain threshold it
-abstained to `2176` on all fresh seeds and did not beat the fixed rule. The
-This was a data ceiling rather than a reason to add a deeper policy, so the
+abstained to `2176` on all fresh seeds and did not beat the fixed rule. This
+was a data ceiling rather than a reason to add a deeper policy, so the
 next investment was matched action states and action-conditioned labels, not
 imagined rollout.
 
@@ -468,5 +468,12 @@ The live maneuvers again lost after recovery, while endpoint averaging gained
 step `2048` and ended at `1.48279`, beating the matched full no-op endpoint
 `1.48691`. Its marginal branch wall time was `68.47s` versus `96.54s`, and its
 marginal compute reduction was `33.25%`; charging the shared 1536-step prefix
-reduces the end-to-end compute saving to `11.08%`. This is one width-transfer
-replication of the timing mechanism, not yet a multi-seed 139M promotion.
+reduces the end-to-end compute saving to `11.08%`. This was the first
+width-transfer replication of the timing mechanism.
+
+The same exact-parent 2048 test on a fresh 139M seed 3 ended at `1.50839`
+versus `1.51308` for its full no-op, with `69.33s` versus `96.61s` of
+marginal branch wall time and zero failures. The 139M 2048 timing result has
+therefore replicated across two seeds, although the end-to-end compute saving
+remains `11.08%` after charging the shared prefix and the candidate is still a
+fixed shadow rule rather than a learned driver.
