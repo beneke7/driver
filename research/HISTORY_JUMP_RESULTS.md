@@ -345,3 +345,10 @@ was `0.03410`; both live maneuvers were worse after the continuation. This
 raises the paired action archive to two fresh all-action states, while the
 selector remains deliberately unpromoted because its held-out sample is still
 too small for calibration.
+
+Fresh 85M FineWeb-Edu seed 5 supplied a third paired state: noop `1.47813`,
+live average `1.48565`, live secant `1.48333`, and shadow merged `1.44783`
+from raw `1.48182`. The shadow improvement was `0.03031`; both live actions
+again lost after recovery. Three independent late all-action states now show
+the same qualitative ranking, giving the next selector test a real safety
+negative set instead of only endpoint-positive examples.
