@@ -147,6 +147,28 @@ claim optimization speedup for a single deployment; any positive result is a
 knowledge-transfer result and must survive fresh target seeds, a changed data
 regime, and the same amortization accounting.
 
+### Same-corpus data-mixture oracle
+
+The next allocation screen tests one fixed, non-learned action: on FineWeb-Edu
+85M and 139M matched parents, replace exactly 25% of the next 768-step
+continuation with blocks from a predeclared disjoint tail interval of the same
+FineWeb training file. Blocks contain 16 optimizer steps (`16,512` stream
+bytes at the current batch/context); four of every sixteen blocks are
+alternate data and the remaining blocks preserve the ordinary target
+continuation order. The source/no-op branch and candidate consume identical
+tokens, optimizer steps, validation, and compute accounting. The alternate
+interval, selected-byte count, candidate cursor, and hashes are recorded.
+
+The baseline is a recomputed AdamW/no-op continuation from the immutable
+parent. The candidate uses the same parent optimizer/RNG state and target
+cursor; only the continuation bytes differ. This is a causal fixed-allocation
+oracle, not a learned selector. Pilot coverage is three fresh roots at each
+width. Promotion requires durable improvement on at least two of three roots
+at both widths and a conservative threshold-cost advantage over the fixed
+shadow control; otherwise close the allocation family. A coarse
+FineWeb/TinyStories switch has already been tested separately and is not
+reused as evidence for this mixture.
+
 ## Capability and cost contract
 
 For every held-out case define three thresholds before reading candidate

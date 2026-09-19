@@ -359,6 +359,14 @@ allocation experiment needs a predeclared common task objective and a smaller
 action such as an in-domain mixture or work/context schedule; otherwise the
 remaining cheap route is initialization or a rigorously causal action atlas.
 
+The next small oracle is now preregistered as a 25% same-corpus FineWeb block
+mixture. It keeps 75% of the target continuation in order, substitutes four
+of every sixteen 16,512-byte optimizer-step blocks from a disjoint tail
+interval, and holds the parent, optimizer, cursor, validation, and token
+budget fixed. Test three fresh 85M and three fresh 139M roots; do not train a
+selector unless at least two of three roots at both widths improve durably and
+threshold cost materially beats the fixed shadow control.
+
 ### Complete-state transport sanity control (2026-09-19)
 
 The state-consistency gap in the earlier future-weight oracle is now measured.
