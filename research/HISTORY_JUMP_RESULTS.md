@@ -656,6 +656,14 @@ aggressive actions in the interface, but it is not a promoted optimizer. A
 driver must gate it from state and include recovery risk; increasing the pulse
 strength is not the missing breakthrough.
 
+The same `2.0/0.25` pulse on FineWeb-Edu 85M gave final deltas of `-0.00016`,
+`+0.00161`, and `+0.00179` on seeds 3, 4, and 5. Its mean degradation was
+about `+0.00108`, despite all branches recovering from their immediate loss
+spike. The action is therefore neither a TinyStories-only win nor a general
+optimizer improvement. The sign variation across otherwise matched roots is
+useful training data for a state-conditioned gate, but not enough evidence to
+promote the pulse itself.
+
 The same exact-parent `2048` timing test was repeated on TinyStories seeds 4
 and 5. Candidates ended at `0.86053` and `0.86252`, versus full no-op endpoints
 `0.84452` and `0.84602`; both saved `33.25%` of branch FLOPs but failed the
