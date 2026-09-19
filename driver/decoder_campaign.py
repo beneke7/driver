@@ -762,6 +762,7 @@ def _branch(
     code_sha: str,
     before: Observation,
     device: torch.device,
+    parent_history: tuple[dict[str, Any], ...] = (),
     trajectory_snapshots: tuple[Path, ...] = (),
     branch_output: Path | None = None,
 ) -> tuple[Transition, dict[str, Any]]:
@@ -1023,6 +1024,7 @@ def _branch(
                 "shadow_raw_final_loss": shadow_raw_final_loss,
                 "shadow_snapshots": [str(path) for path in shadow_snapshots],
                 "horizon_metrics": phase_metrics,
+                "parent_history": [dict(row) for row in parent_history],
                 "telemetry": telemetry,
                 "target_tokens": target_tokens,
                 "target_flops": target_flops,
@@ -1345,6 +1347,7 @@ def _run_case(
             code_sha=code_revision,
             before=before,
             device=device,
+            parent_history=tuple(prefix_telemetry[-16:]),
             trajectory_snapshots=tuple(trajectory_snapshots),
             branch_output=case_output / "branches" / proposal.strategy,
         )
