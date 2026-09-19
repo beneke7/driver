@@ -53,6 +53,7 @@ ROLE_HISTORY_FIELDS = (
     "adam_momentum_norms",
     "adam_variance_norms",
 )
+POSITION_FIELDS = ("step", "tokens")
 ARCHITECTURE_FIELDS = ("width", "layers", "heads", "vocab_size", "context")
 
 
@@ -102,6 +103,7 @@ def _state_vector(row: dict[str, Any], history: int) -> tuple[float, ...]:
     if not isinstance(features, dict) or not isinstance(case, dict):
         raise ValueError("atlas row has invalid parent or case fields")
     values = [_finite(features.get(name)) for name in CURRENT_FIELDS]
+    values.extend(_finite(parent.get(name)) for name in POSITION_FIELDS)
     values.extend(_finite(case.get(name)) for name in ARCHITECTURE_FIELDS)
     raw_history = parent.get("history", [])
     if not isinstance(raw_history, list):
@@ -542,7 +544,12 @@ def _self_check() -> None:
     state = _state_vector(row, 2)
     values = _feature_vector(row, "noop", "final", ("noop", "pulse"), 2)
     history_width = len(HISTORY_FIELDS) + len(ROLE_HISTORY_FIELDS) * len(ROLE_NAMES)
-    assert len(state) == len(CURRENT_FIELDS) + len(ARCHITECTURE_FIELDS) + 2 * history_width
+    assert len(state) == (
+        len(CURRENT_FIELDS)
+        + len(POSITION_FIELDS)
+        + len(ARCHITECTURE_FIELDS)
+        + 2 * history_width
+    )
     assert len(values) == len(state) + 2 + 1 + len(HORIZONS)
     model = Predictor(len(values), 8)
     prediction = model(torch.zeros(1, len(values)))

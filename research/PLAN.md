@@ -215,3 +215,12 @@ mechanism. Any future intervention must model long-horizon/recovery response
 directly and reject actions whose transient gain is not durable; the next
 workload moves to an explicitly charged jump/nowcasting or data-allocation
 hypothesis.
+
+The atlas state then gained the parent checkpoint's absolute `step` and
+`tokens`, which were already present in provenance but omitted from the model
+input. On the same roots 9--12 to 13--14 holdout, final prediction RMSE
+improved from `0.0560` to `0.01496`. Final raw top-1 agreement remained `0/2`,
+and the safe selector chose no-op on both held-out roots, so this is an
+observability/calibration improvement with a known ceiling, not evidence for
+state-dependent control. Keep the support gate and do not add more pulse
+variants.

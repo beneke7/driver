@@ -120,6 +120,18 @@ gap `0.0474`; its safe selected mean is `+0.00065`, versus `+0.00226` for the
 action prior and `0` for the noop oracle. The fixed-pulse speed route is a
 no-go until a different state/action representation explains these failures.
 
+### Position observability ablation (2026-09-19)
+
+The atlas state was missing the parent checkpoint's absolute `step` and
+`tokens`. Adding those already-recorded fields is a minimal observability fix
+for phase-dependent dynamics; it does not add a new sensor or action. On the
+same long-horizon split (train roots 9--12, held-out roots 13--14), final
+prediction RMSE fell from `0.0560` to `0.01496`. However, raw final action
+top-1 agreement remained `0/2`, and the uncertainty-gated selector chose
+no-op on both held-out roots. Its safe selected mean was `0`, versus `0` for
+the noop oracle and `+0.00226` for the fixed action prior. The feature fixes a
+real state omission, but does not justify a planner or reopen the pulse route.
+
 An action-size grid on the two failure roots confirms the ceiling. On seed 13,
 small/medium/large pulses have immediate deltas `-0.00128/-0.00583/-0.01089`
 but final deltas `+0.00025/+0.00173/+0.00264`; on seed 14 the corresponding
