@@ -22,6 +22,7 @@ controls; none is a contract-valid 10x deployment result.
 | Changed-regime timing transfer | FineWeb 85M train; FineWeb 139M/TinyStories holdout, 9 groups | Support `0/9`, safe noop `9/9`, raw final top-1 `4/9` | Final prediction/reality gap `0.00431`; oracle mean `-0.01942` | Geometry does not transfer; collect calibration data |
 | Changed-regime calibration | FineWeb 139M/TinyStories, 9 groups; leave-one-seed-out | Final top-1 `2/3`, `3/3`, `3/3`; pooled selected mean `-0.01552` vs prior `-0.01933` | Recovery selected branches safe; prediction gaps `0.0027--0.0037` | No selector gain; do not add capacity |
 | Multi-horizon cost-aware gate | FineWeb 85M timing holdouts, 6 groups; changed calibration, 9 groups | Timing: 1/6 actions and 1/6 recovery violations; changed: 4/9 actions, 0/9 recovery violations, but final mean `-0.012733` vs prior `-0.019329` | Timing pooled geometric wall `1.0167x`; changed `1.0565x`; final gaps `0.000492` and `0.002221` | Safety filter only; close current selector rung |
+| AdamW momentum extrapolation | FineWeb 85M, seeds 27--29; 2 alphas | Small: 0/3 final wins at `-1e-3`; medium: 1/3 durable-safe final wins and one recovery failure | Equal tokens; about `0.04%` extra charged FLOPs and `0.2%` wall | Close standalone update-space probe |
 
 The shadow row is retained as a useful fixed baseline; its exact charged
 ratios and roster are in

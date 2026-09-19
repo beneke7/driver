@@ -538,3 +538,20 @@ abstention improves safety accounting but has not produced a useful
 held-out policy. Keep it as a control. Do not scale the steerer or add
 planning/RL; a next rung needs a new preregistered causal action family and a
 matched small oracle ceiling first.
+
+### AdamW momentum-extrapolation probe (2026-09-20)
+
+The next equal-token update-space probe completed 9/9 FineWeb-Edu 85M
+branches with zero failures. Applying `0.25` or `0.50` of one
+bias-corrected AdamW moment update while preserving optimizer time and data
+cursor produced mean final deltas of `-0.000210` and `-0.000430`. The small
+action had no final improvement at the fixed `-1e-3` margin; the medium action
+had only 1/3 durable-safe final wins and one recovery regression of `+0.002929`.
+The family therefore misses its preregistered 2/3 pilot gate and is closed
+without the planned TinyStories transfer. See
+[`MOMENTUM_EXTRAPOLATION_RESULTS.md`](MOMENTUM_EXTRAPOLATION_RESULTS.md).
+
+This is a useful negative control: current AdamW moments alone do not supply a
+robust durable update direction. The next action, if pursued, must be a new
+one-real-gradient skip with explicit data-cursor and optimizer-state
+advancement; it requires its own preregistration and conservative accounting.
