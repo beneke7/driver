@@ -265,3 +265,18 @@ the matched no-op, end-to-end cost components, failure/risk fields, and
 checkpoint/config/data/objective provenance. The decoder-specific 10x gate is
 preregistered in
 [research/DECODER_DRIVER_PREREGISTRATION.md](research/DECODER_DRIVER_PREREGISTRATION.md).
+
+Fit the deliberately conservative offline response model only after choosing
+complete-root splits:
+
+```bash
+.venv/bin/python -m driver.response_atlas_model \
+  --atlas runs/response-atlas/atlas.jsonl \
+  --holdout-root <complete-root> \
+  --output runs/response-atlas-model
+```
+
+The model reports all three horizons, ensemble uncertainty, support
+calibration, action ranking, and prediction-versus-reality gaps. Unsupported
+states fall back to `noop`; the model never turns imagined responses into
+evidence.

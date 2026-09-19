@@ -105,3 +105,14 @@ The action-only prior was better than that abstaining policy on this small
 holdout, so there is no justification yet for a planner or online learner.
 The next atlas model must first beat that prior on held-out roots within a
 single data regime, then survive the changed-data gate.
+
+The new three-horizon ensemble was tested on the eight-root FineWeb atlas,
+holding out one 139M and one 85M root. It supported one of the two roots and
+selected the shadow action there at the final horizon, but its selected mean
+final delta was `-0.0178` versus `-0.0351` for the action-only prior; it did
+not beat the prior. On four complete TinyStories roots trained only from the
+FineWeb atlas, support was `0.0`, final prediction RMSE was `0.0101`, and the
+safe selector abstained everywhere. The raw final ranking happened to agree
+with the realized best action, but the prediction/reality gap and zero support
+make that diagnostic only. The predictive gate therefore remains closed:
+there is no justified planner, dreaming stage, or online policy yet.

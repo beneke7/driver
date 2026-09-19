@@ -249,11 +249,22 @@ def _record(
     manifest: Mapping[str, Any],
     noop: Mapping[str, Any] | None,
     group_id: str,
+    source_result: str,
 ) -> dict[str, Any]:
     before = _mapping(row["before"], "transition.before")
     metadata = _mapping(row.get("metadata", {}), "transition.metadata")
     case_id = str(row["run_id"])
     immutable = _mapping(manifest.get("immutable", {}), "manifest.immutable")
+    raw_history = metadata.get("parent_history", ())
+    if not isinstance(raw_history, list):
+        raw_history = []
+    parent_history = [
+        dict(_mapping(item, "transition.metadata.parent_history item"))
+        for item in raw_history
+    ]
+    raw_config = manifest.get("config", {})
+    config = raw_config if isinstance(raw_config, Mapping) else {}
+    root_id = f"{Path(source_result).name}:{case_id}"
     prefix_wall = _finite(
         _mapping(before.get("features", {}), "transition.before.features").get(
             "prefix_seconds", 0.0
@@ -299,13 +310,27 @@ def _record(
         "schema": ROW_SCHEMA,
         "atlas_id": f"{group_id}:{row.get('transition_id', '')}",
         "group_id": group_id,
+        "root_id": root_id,
         "case_id": case_id,
         "source_transition_id": str(row.get("transition_id", "")),
+        "case": {
+            "landscape": str(case.get("landscape", "")),
+            "seed": int(case.get("seed", 0)),
+            "root_id": root_id,
+            "optimizer": str(config.get("optimizer", "adamw")),
+            "width": int(config.get("width", 0)),
+            "layers": int(config.get("layers", 0)),
+            "heads": int(config.get("heads", 0)),
+            "context": int(config.get("context", 0)),
+            "data_sha256": str(case.get("data_sha256", "")),
+            "config_sha256": str(case.get("config_sha256", "")),
+        },
         "parent": {
             "step": int(before["step"]),
             "tokens": prefix_tokens,
             "loss": _finite(before["loss"], "parent.loss"),
             "features": dict(_mapping(before.get("features", {}), "parent.features")),
+            "history": parent_history,
         },
         "action": {
             "kind": str(action.get("kind", "")),
@@ -327,7 +352,10 @@ def _record(
 def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if not results:
         raise ValueError("at least one campaign result directory is required")
-    groups: dict[tuple[str, str, int, int], list[tuple[dict[str, Any], Mapping[str, Any], Mapping[str, Any]]]] = defaultdict(list)
+    groups: dict[
+        tuple[str, str, int, int],
+        list[tuple[dict[str, Any], Mapping[str, Any], Mapping[str, Any], str]],
+    ] = defaultdict(list)
     input_manifests: list[dict[str, Any]] = []
     for result in results:
         manifest_path = result / "manifest.json"
@@ -341,7 +369,7 @@ def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list
             case = cases.get(case_id)
             if case is None:
                 raise ValueError(f"transition {row.get('transition_id')} has unknown case {case_id}")
-            groups[_group_key(row, case)].append((row, case, manifest))
+            groups[_group_key(row, case)].append((row, case, manifest, str(result)))
         input_manifests.append(
             {
                 "path": str(manifest_path),
@@ -356,7 +384,9 @@ def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list
     unmatched = 0
     duplicate_actions = 0
     for key, entries in sorted(groups.items()):
-        actions: dict[str, tuple[dict[str, Any], Mapping[str, Any], Mapping[str, Any]]] = {}
+        actions: dict[
+            str, tuple[dict[str, Any], Mapping[str, Any], Mapping[str, Any], str]
+        ] = {}
         for entry in entries:
             kind = str(_mapping(entry[0].get("action"), "transition.action").get("kind", ""))
             if kind in actions:
@@ -368,7 +398,7 @@ def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list
             unmatched += sum(kind != "noop" for kind in actions)
         group_id = ":".join((key[0], key[1], str(key[2]), str(key[3])))
         for entry in entries:
-            row, case, manifest = entry
+            row, case, manifest, source_result = entry
             if require_matched and str(
                 _mapping(row.get("action"), "transition.action").get("kind", "")
             ) != "noop" and noop is None:
@@ -380,6 +410,7 @@ def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list
                     manifest=manifest,
                     noop=None if noop is None else noop[0],
                     group_id=group_id,
+                    source_result=source_result,
                 )
             )
     summary = {
@@ -459,6 +490,7 @@ def _self_check() -> None:
                 "target_flops": 20.0,
                 "target_tokens": 10,
                 "driver_cost": {"inference_flops": 1.0, "evaluation_flops": 9.0},
+                "parent_history": [{"step": 9, "loss": 2.1}],
                 "horizon_metrics": [
                     {"name": "immediate", "loss": 1.9},
                     {"name": "recovery", "loss": 1.8},
@@ -493,6 +525,7 @@ def _self_check() -> None:
         candidate = next(row for row in records if row["action"]["kind"] != "noop")
         assert abs(candidate["response"]["final_loss_delta_vs_noop"] + 0.1) < 1e-9
         assert abs(candidate["cost"]["flops"] - 130.0) < 1e-9
+        assert candidate["parent"]["history"] == [{"step": 9, "loss": 2.1}]
     print("response-atlas self-check passed")
 
 
