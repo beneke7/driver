@@ -116,3 +116,25 @@ safe selector abstained everywhere. The raw final ranking happened to agree
 with the realized best action, but the prediction/reality gap and zero support
 make that diagnostic only. The predictive gate therefore remains closed:
 there is no justified planner, dreaming stage, or online policy yet.
+
+The clean pilot at commit `259dc9f` expands the same action atlas to six roots:
+three FineWeb-Edu and three TinyStories roots, each with no-op, small/medium/
+large role pulses, damping, trajectory averaging, trajectory extrapolation,
+and optimizer-state-reset extrapolation. It contains 48 matched rows across
+three horizons with zero branch failures. On FineWeb, the large pulse improves
+final loss on all three seeds (mean delta `-0.00227`) but is immediately worse
+by `+0.0321`; on TinyStories it improves only one of three seeds (mean delta
+`-0.00014`). The medium pulse is the best TinyStories pulse on average (mean
+delta `-0.00018`), still far below a meaningful speedup. Averaging regresses
+by `+0.00404` on FineWeb and `+0.00580` on TinyStories; extrapolation is near
+zero on FineWeb (`-0.00047`) and regresses on TinyStories (`+0.00127`); reset
+extrapolation regresses by roughly `+0.24` on both data regimes.
+
+The FineWeb-to-TinyStories response model has zero calibrated support: its
+held-out state distances are about `452` against a training support radius of
+`19.2`. Its final prediction RMSE is `0.157`, and the safe policy abstains on
+all three held-out roots. This is a useful falsification of a first shared
+geometry, not evidence for a planner. The next rung is more controlled atlas
+coverage and representation diagnosis; do not add MPC, dreaming, or online
+RL until an action-conditioned model beats the action-only prior on held-out
+roots within support.
