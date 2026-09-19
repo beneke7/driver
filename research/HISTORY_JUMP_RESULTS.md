@@ -450,3 +450,23 @@ Every positive alpha was worse than alpha zero at both checkpoints. Keep
 secant extrapolation as a negative control and retain plain window-2 averaging
 as the only promoted endpoint action until a learned action-conditioned model
 beats it on fresh states.
+
+### 139M width transfer
+
+A fresh 139M FineWeb-Edu four-way action set tested the same parent step and
+action interface at width 1024 / 11 layers. All branches succeeded:
+
+| Action | Final validation loss | Immediate | Recovery | Shadow raw |
+| --- | ---: | ---: | ---: | ---: |
+| No-op | `1.48691` | `1.63529` | `1.54183` | — |
+| Live average | `1.48948` | `1.64814` | `1.54571` | — |
+| Live extrapolate | `1.48859` | `1.63307` | `1.54537` | — |
+| Shadow average | `1.45133` | `1.63492` | `1.54394` | `1.48732` |
+
+The live maneuvers again lost after recovery, while endpoint averaging gained
+`0.03558`. More importantly, an exact-parent shadow branch stopped at global
+step `2048` and ended at `1.48279`, beating the matched full no-op endpoint
+`1.48691`. Its marginal branch wall time was `68.47s` versus `96.54s`, and its
+marginal compute reduction was `33.25%`; charging the shared 1536-step prefix
+reduces the end-to-end compute saving to `11.08%`. This is one width-transfer
+replication of the timing mechanism, not yet a multi-seed 139M promotion.
