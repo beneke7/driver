@@ -260,3 +260,31 @@ the 10x contract gate and not a learned policy. The next rung is a minimal
 cost-aware action gate over `{noop, shadow-stop-512, shadow-full-768}`; train
 it only after the duration is represented in the response atlas, and preserve
 no-op abstention on unsupported roots.
+
+## Direction amendment (2026-09-19): learned trajectory transport
+
+The fixed pulse route is now closed as a promotion path. The next research
+question is whether a short calibration trajectory can identify a mesoscopic
+productive region and generate a structured macro-action that transports the
+model toward a future capability-equivalent state.
+
+See [TRAJECTORY_TRANSPORT_DIRECTION.md](TRAJECTORY_TRANSPORT_DIRECTION.md) for
+the amended contract boundary, passive public trajectory sources, productive-
+region classifier, transport-action definition, oracle-ceiling ladder, and
+few-shot initialization route.
+
+The robust 10x gate is unchanged. Passive public checkpoints, hindsight
+future-state oracles, and shadow endpoints are diagnostic evidence only; they
+cannot be reported as deployed driver gains. The next implementation must
+separate:
+
+1. passive trajectory representation pretraining;
+2. oracle ceilings for future-state transport and data utility;
+3. learned low-rank/role-wise transport;
+4. cheap productive-region gating and few-shot initialization;
+5. planning or RL only after selected real actions are calibrated.
+
+Do not add more pulse variants, a large pretrained meta-brain, MPC, dreaming,
+or online RL before a transport or productive-region baseline beats noop and
+the action-only prior on fresh complete roots.
+
