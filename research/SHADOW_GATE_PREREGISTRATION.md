@@ -71,7 +71,7 @@ Replace `<data>` and the width-specific model arguments as shown below. Each
 stratum uses one empty output directory and both strategies:
 
 ```bash
-uv run python -m driver.decoder_campaign \
+CUDA_LAUNCH_BLOCKING=1 uv run python -m driver.decoder_campaign \
   --output runs/shadow-gate-<data>-<width>-s9-11 \
   --landscape phase_switch --seed 9 --seed 10 --seed 11 \
   --strategy noop --strategy trajectory_shadow_stop \
