@@ -29,6 +29,7 @@ from .decoder_benchmark import (
     _flops,
     _hash_bytes,
     _hash_tensor,
+    _role,
     make_byte_stream,
     make_stream,
 )
@@ -41,6 +42,9 @@ from .decoder_campaign import (
     _sync,
     _train_step,
 )
+
+
+TRANSPORT_ROLES = ("embedding", "attention", "mlp", "norm", "head")
 
 
 def _file_sha256(path: Path) -> str:
@@ -233,6 +237,7 @@ def _run_variant(
     recovery_after: int,
     cursor_policy: str,
     optimizer_state_policy: str,
+    transport_roles: tuple[str, ...] | None,
     device: torch.device,
 ) -> dict[str, Any]:
     started = time.perf_counter()
@@ -259,7 +264,16 @@ def _run_variant(
         )
         if observed_step != future_step:
             raise ValueError(f"future snapshot step mismatch: {future}")
-        model.load_state_dict(future_state)
+        if transport_roles is None:
+            model.load_state_dict(future_state)
+        else:
+            for name, parameter in model.named_parameters():
+                if _role(name) in transport_roles:
+                    parameter.copy_(
+                        future_state[name].to(
+                            device=parameter.device, dtype=parameter.dtype
+                        )
+                    )
         del future_state
         if optimizer_state_policy == "zero_moments":
             reset_count = _reset_adam_moments(optimizer)
@@ -344,7 +358,16 @@ def _run_variant(
         wall_seconds = time.perf_counter() - started
         parameter_count = sum(parameter.numel() for parameter in model.parameters())
         target_tokens = continuation_steps * target.batch_size * target.context
-        transport_flops = 2.0 * parameter_count
+        transported_parameters = (
+            parameter_count
+            if transport_roles is None
+            else sum(
+                parameter.numel()
+                for name, parameter in model.named_parameters()
+                if _role(name) in transport_roles
+            )
+        )
+        transport_flops = 2.0 * transported_parameters
         evaluation_flops = (
             2.0
             * parameter_count
@@ -372,6 +395,7 @@ def _run_variant(
             "case_id": source_case["case_id"],
             "cursor_policy": cursor_policy,
             "optimizer_state_policy": optimizer_state_policy,
+            "transport_roles": list(transport_roles or TRANSPORT_ROLES),
             "future_step": future_step,
             "continuation_steps": continuation_steps,
             "recovery_after": recovery_after,
@@ -422,6 +446,7 @@ def _run_variant(
             "case_id": source_case["case_id"],
             "cursor_policy": cursor_policy,
             "optimizer_state_policy": optimizer_state_policy,
+            "transport_roles": list(transport_roles or TRANSPORT_ROLES),
             "failed": True,
             "failure": f"{type(exc).__name__}: {exc}",
             "oracle_only": True,
@@ -442,6 +467,7 @@ def _run_case(
     recovery_after: int,
     cursor_policies: tuple[str, ...],
     optimizer_state_policies: tuple[str, ...],
+    transport_role_sets: tuple[tuple[str, ...] | None, ...],
     device: torch.device,
 ) -> dict[str, Any]:
     campaign, target = _campaign_and_config(manifest["config"], case)
@@ -499,25 +525,27 @@ def _run_case(
     results = []
     for cursor_policy in cursor_policies:
         for optimizer_state_policy in optimizer_state_policies:
-            results.append(
-                _run_variant(
-                    parent=parent,
-                    future=future,
-                    source_case=source_case,
-                    source_transition=source_transition,
-                    campaign=campaign,
-                    target=target,
-                    train_values=train_values,
-                    validation_values=validation_values,
-                    config_sha=config_sha,
-                    data_sha=data_sha,
-                    future_step=future_step,
-                    recovery_after=recovery_after,
-                    cursor_policy=cursor_policy,
-                    optimizer_state_policy=optimizer_state_policy,
-                    device=device,
+            for transport_roles in transport_role_sets:
+                results.append(
+                    _run_variant(
+                        parent=parent,
+                        future=future,
+                        source_case=source_case,
+                        source_transition=source_transition,
+                        campaign=campaign,
+                        target=target,
+                        train_values=train_values,
+                        validation_values=validation_values,
+                        config_sha=config_sha,
+                        data_sha=data_sha,
+                        future_step=future_step,
+                        recovery_after=recovery_after,
+                        cursor_policy=cursor_policy,
+                        optimizer_state_policy=optimizer_state_policy,
+                        transport_roles=transport_roles,
+                        device=device,
+                    )
                 )
-            )
     return {
         "case_id": case["case_id"],
         "landscape": case["landscape"],
@@ -559,6 +587,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     source_manifests = tuple(_repo_path(path) for path in args.source_manifest)
     cursor_policies = tuple(args.cursor_policy or ("preserve", "skip"))
     optimizer_state_policies = tuple(args.optimizer_state_policy or ("preserve",))
+    transport_role_sets = (
+        tuple((role,) for role in TRANSPORT_ROLES)
+        if args.role_wise
+        else (None,)
+    )
     if args.future_step <= 0 or args.recovery_after <= 0:
         raise ValueError("future_step and recovery_after must be positive")
     device = torch.device(args.device)
@@ -583,6 +616,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     recovery_after=args.recovery_after,
                     cursor_policies=cursor_policies,
                     optimizer_state_policies=optimizer_state_policies,
+                    transport_role_sets=transport_role_sets,
                     device=device,
                 )
             )
@@ -617,6 +651,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "recovery_after": args.recovery_after,
         "cursor_policies": list(cursor_policies),
         "optimizer_state_policies": list(optimizer_state_policies),
+        "transport_role_sets": [
+            list(roles or TRANSPORT_ROLES) for roles in transport_role_sets
+        ],
         "source_manifests": [
             {
                 "path": str(path),
@@ -631,7 +668,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         },
         "coverage": {
             "cases": len(cases),
-            "variants": len(cases) * len(cursor_policies) * len(optimizer_state_policies),
+            "variants": len(cases)
+            * len(cursor_policies)
+            * len(optimizer_state_policies)
+            * len(transport_role_sets),
             "failed_variants": len(failures),
         },
         "cases": cases,
@@ -656,6 +696,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--optimizer-state-policy",
         action="append",
         choices=("preserve", "zero_moments"),
+    )
+    parser.add_argument(
+        "--role-wise",
+        action="store_true",
+        help="run one hindsight future-state branch per tensor role",
     )
     parser.add_argument("--self-check", action="store_true")
     return parser
