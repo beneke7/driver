@@ -730,3 +730,23 @@ The larger-skip boundary was tested from a 139M FineWeb parent at global
 plain shadow branch from this parent had already missed, so the pulse does not
 rescue an earlier trajectory. The current positive region is therefore local
 to the later `1536` parent, not a generic “skip half the run” rule.
+
+### Native Muon baseline screen
+
+The action was then compared against PyTorch's native Muon hybrid: Muon with
+RMS-matched learning-rate adjustment for 2D attention/MLP weights, AdamW for
+embeddings, norms, and the head, and the same `3e-4` base learning rate. This
+is a baseline screen, not yet a checked-in campaign optimizer.
+
+| Target | Muon no-op endpoint / end-to-end wall | Muon pulse+shadow endpoint / wall | Action delta | Wall reduction |
+| --- | ---: | ---: | ---: | ---: |
+| 85M FineWeb seed 3 | `1.34297` / `176.47s` | `1.33335` / `157.53s` | `-0.00962` | `10.7%` |
+| 139M FineWeb seed 3 | `1.32965` / `283.09s` | `1.31725` / `252.62s` | `-0.01240` | `10.8%` |
+
+For reference, the AdamW no-op endpoints were `1.48249` at 85M and `1.51308`
+at 139M, with end-to-end walls about `199.23s` and `284.63s`. Muon is a much
+stronger optimizer here, not a cosmetic alternative, and the pulse+shadow
+action still improves its endpoint while replacing 768 branch steps with 512.
+The two Muon rows are single-seed screens and need replication, but the driver
+claim now has the correct baseline direction: it is not merely exploiting
+under-tuned AdamW.
