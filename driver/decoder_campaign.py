@@ -73,12 +73,14 @@ MOMENTUM_STRATEGIES = (
     "momentum_extrapolate_small",
     "momentum_extrapolate_medium",
 )
+DEPTH_STRATEGIES = ("depth_curriculum",)
 ALL_STRATEGIES = (
     STRATEGIES
     + TRAJECTORY_STRATEGIES
     + SHADOW_STRATEGIES
     + PULSE_STRATEGIES
     + MOMENTUM_STRATEGIES
+    + DEPTH_STRATEGIES
     + ("damping",)
 )
 QUALITY_FACTORS = (0.995, 0.99, 0.98)
@@ -120,6 +122,8 @@ class CampaignConfig:
     trajectory_interval: int = 32
     trajectory_window: int = 4
     trajectory_alpha: float = 1.0
+    depth_curriculum_layers: int = 6
+    depth_curriculum_steps: int = 384
     controller_up: float = 1.05
     controller_down: float = 0.80
     online_up: float = 1.05
@@ -533,6 +537,7 @@ def _proposals(
         "role_pulse_large": "role_pulse_large",
         "momentum_extrapolate_small": "noop",
         "momentum_extrapolate_medium": "noop",
+        "depth_curriculum": "depth_curriculum",
         "damping": "damping",
     }
     shallow_score = (
@@ -613,6 +618,39 @@ def _schedule_multipliers(
     return 1.0, {}
 
 
+def _active_layers_for_step(
+    schedule: str, step: int, campaign: CampaignConfig, depth: int
+) -> int | None:
+    if schedule == "depth_curriculum" and step < campaign.depth_curriculum_steps:
+        if not 1 <= campaign.depth_curriculum_layers <= depth:
+            raise ValueError("depth curriculum exceeds model depth")
+        return campaign.depth_curriculum_layers
+    return None
+
+
+def _parameter_count_for_layers(
+    model: DecoderLM, active_layers: int | None
+) -> int:
+    if active_layers is None:
+        return sum(parameter.numel() for parameter in model.parameters())
+    if type(active_layers) is not int or not 1 <= active_layers <= len(model.blocks):
+        raise ValueError("active_layers must be between 1 and the model depth")
+    count = 0
+    for name, parameter in model.named_parameters():
+        if name.startswith("blocks."):
+            block_index = int(name.split(".", 2)[1])
+            if block_index >= active_layers:
+                continue
+        count += parameter.numel()
+    return count
+
+
+def _estimated_training_flops(
+    model: DecoderLM, tokens: int, active_layers: int | None
+) -> float:
+    return 6.0 * _parameter_count_for_layers(model, active_layers) * tokens
+
+
 def _train_step(
     model: DecoderLM,
     optimizer: torch.optim.Optimizer,
@@ -640,14 +678,21 @@ def _train_step(
         device=device,
     )
     optimizer.zero_grad(set_to_none=True)
+    active_layers = _active_layers_for_step(
+        schedule, step, campaign, len(model.blocks)
+    )
     with _autocast(campaign, device):
-        loss = model(tokens, targets)
+        loss = model(tokens, targets, active_layers=active_layers)
     loss.backward()
     telemetry = _telemetry(model, optimizer, loss)
     optimizer.step()
     telemetry["step"] = step + 1
     telemetry["global_lr_multiplier"] = global_multiplier
     telemetry["schedule"] = schedule
+    telemetry["active_layers"] = len(model.blocks) if active_layers is None else active_layers
+    telemetry["estimated_flops"] = _estimated_training_flops(
+        model, target_config.batch_size * target_config.context, active_layers
+    )
     return telemetry, target_config.batch_size * target_config.context
 
 
@@ -1086,6 +1131,7 @@ def _branch(
             zip(phase_steps, phase_names)
         ):
             phase_started = time.perf_counter()
+            phase_flops = 0.0
             for step in range(previous, boundary):
                 current, consumed = _train_step(
                     model,
@@ -1099,6 +1145,7 @@ def _branch(
                     runtime=runtime,
                 )
                 telemetry.append(current)
+                phase_flops += float(current["estimated_flops"])
                 consumed_tokens += consumed
                 branch_step = step + 1
                 if branch_step in shadow_snapshot_steps:
@@ -1150,6 +1197,7 @@ def _branch(
                     "tokens": before.tokens + consumed_tokens,
                     "wall_seconds": time.perf_counter() - started,
                     "phase_wall_seconds": time.perf_counter() - phase_started,
+                    "compute_flops": phase_flops,
                 }
             )
             previous = boundary
@@ -1181,12 +1229,7 @@ def _branch(
             phase_metrics[-1]["raw_loss"] = shadow_raw_final_loss
             phase_metrics[-1]["loss"] = final_loss
         target_tokens = consumed_tokens
-        target_flops = _flops(
-            target_config,
-            model,
-            target_tokens,
-            0,
-        )
+        target_flops = sum(float(row["estimated_flops"]) for row in telemetry)
         parameter_count = sum(parameter.numel() for parameter in model.parameters())
         pulse_overhead_flops = (
             2.0 * parameter_count * campaign.immediate_steps
@@ -1201,12 +1244,9 @@ def _branch(
         driver_update_flops = 1.0 if proposal.strategy == "online_lr_control" else 0.0
         maneuver_flops = 0.0 if maneuver is None else float(maneuver["flops"])
         action_overhead_flops = pulse_overhead_flops + maneuver_flops
-        recovery_flops = _flops(
-            target_config,
-            model,
-            (recovery_steps - immediate_steps)
-            * target_config.batch_size
-            * target_config.context,
+        recovery_flops = sum(
+            float(row["estimated_flops"])
+            for row in telemetry[immediate_steps:recovery_steps]
         )
         _sync(device)
         wall_seconds = time.perf_counter() - started
@@ -1240,6 +1280,7 @@ def _branch(
             "trajectory_shadow_stop": 13.0,
             "momentum_extrapolate_small": 14.0,
             "momentum_extrapolate_medium": 15.0,
+            "depth_curriculum": 16.0,
         }
         action_parameters = {
             "predicted_gain": proposal.predicted_gain,
@@ -1263,6 +1304,14 @@ def _branch(
             action_parameters["global_lr_multiplier"] = 0.80
         if proposal.strategy in MOMENTUM_STRATEGIES and maneuver is not None:
             action_parameters["momentum_alpha"] = maneuver["alpha"]
+        if selected_schedule == "depth_curriculum":
+            action_parameters.update(
+                {
+                    "active_layers": campaign.depth_curriculum_layers,
+                    "curriculum_steps": campaign.depth_curriculum_steps,
+                    "full_layers": target_config.layers,
+                }
+            )
         cost_components = {
             "target_flops": target_flops - recovery_flops - pulse_overhead_flops,
             "driver_inference_flops": driver_inference_flops,
@@ -1828,7 +1877,23 @@ def _self_check() -> None:
     assert maneuver["optimizer_state"] == "preserved"
     assert int(optimizer.state[parameter]["step"].item()) == state_step
     assert not torch.equal(parameter.detach(), before)
-    print("decoder campaign self-check: momentum extrapolation preserves state")
+    config = Config(
+        landscape="phase_switch",
+        seed=0,
+        vocab_size=8,
+        context=4,
+        batch_size=2,
+        width=8,
+        layers=2,
+        heads=2,
+    )
+    model = DecoderLM(config)
+    tokens = torch.zeros((2, 4), dtype=torch.long)
+    targets = torch.zeros((2, 4), dtype=torch.long)
+    model(tokens, targets, active_layers=1).backward()
+    assert model.blocks[1].qkv.weight.grad is None
+    assert _parameter_count_for_layers(model, 1) < _parameter_count_for_layers(model, None)
+    print("decoder campaign self-check: momentum state and depth curriculum")
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -1867,6 +1932,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         trajectory_interval=args.trajectory_interval,
         trajectory_window=args.trajectory_window,
         trajectory_alpha=args.trajectory_alpha,
+        depth_curriculum_layers=args.depth_curriculum_layers,
+        depth_curriculum_steps=args.depth_curriculum_steps,
         amp=not args.no_amp,
     )
     if campaign.width % campaign.heads:
@@ -1877,6 +1944,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("trajectory interval and window must be positive")
     if not math.isfinite(campaign.trajectory_alpha):
         raise ValueError("trajectory_alpha must be finite")
+    if not 1 <= campaign.depth_curriculum_layers < campaign.layers:
+        raise ValueError("depth_curriculum_layers must be between 1 and layers - 1")
+    if not 0 < campaign.depth_curriculum_steps < campaign.final_steps:
+        raise ValueError("depth_curriculum_steps must be between 1 and final_steps - 1")
     for name in (
         "pulse_attention",
         "pulse_mlp",
@@ -2135,6 +2206,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--trajectory-alpha", type=float, default=CampaignConfig.trajectory_alpha
+    )
+    parser.add_argument(
+        "--depth-curriculum-layers",
+        type=int,
+        default=CampaignConfig.depth_curriculum_layers,
+    )
+    parser.add_argument(
+        "--depth-curriculum-steps",
+        type=int,
+        default=CampaignConfig.depth_curriculum_steps,
     )
     parser.add_argument("--no-amp", action="store_true")
     parser.add_argument("--allow-small-target", action="store_true")

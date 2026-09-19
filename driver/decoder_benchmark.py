@@ -192,9 +192,21 @@ class DecoderLM(nn.Module):
         self.final_norm = nn.LayerNorm(config.width)
         self.lm_head = nn.Linear(config.width, config.vocab_size, bias=False)
 
-    def forward(self, tokens: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        tokens: torch.Tensor,
+        targets: torch.Tensor,
+        *,
+        active_layers: int | None = None,
+    ) -> torch.Tensor:
+        if active_layers is not None:
+            if type(active_layers) is not int or not 1 <= active_layers <= len(self.blocks):
+                raise ValueError("active_layers must be between 1 and the model depth")
+            blocks = self.blocks[:active_layers]
+        else:
+            blocks = self.blocks
         values = self.token_embedding(tokens) + self.position_embedding[:, : tokens.shape[1]]
-        for block in self.blocks:
+        for block in blocks:
             values = block(values)
         logits = self.lm_head(self.final_norm(values))
         return F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.reshape(-1))
