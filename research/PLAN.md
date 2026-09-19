@@ -375,6 +375,22 @@ This closes the optimizer-state provenance gap without reopening the transport
 promotion path. See
 [`FULL_STATE_TRANSPORT_RESULTS.md`](FULL_STATE_TRANSPORT_RESULTS.md).
 
+### Actionability label corpus (2026-09-19)
+
+The preregistered causal labeler now converts observed matched atlas rows into
+`productive`, `jumpable`, `recoverable`, `dangerous`, `stalled`, `neutral`, or
+the separate `noop_baseline` class. On the mixed 15-root atlas it found only
+4 productive non-noop rows against 31 dangerous and 45 recoverable rows. The
+only two jumpable rows came from one phase-switch seed; timing-shadow atlases
+are mostly productive because they represent one fixed mechanism, not a
+transferable selector. The action-conditioned classifier gate therefore
+remains closed. See
+[`ACTIONABILITY_LABEL_RESULTS.md`](ACTIONABILITY_LABEL_RESULTS.md).
+
+The next causal collection should increase within-regime action coverage and
+hold out complete roots before fitting a classifier. Do not use the current
+label imbalance to justify a larger model or a planner.
+
 ### Passive trajectory corpus and phase model (2026-09-19)
 
 The first normalized passive corpus now contains 17 complete local AdamW roots
