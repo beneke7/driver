@@ -16,7 +16,7 @@ controls; none is a contract-valid 10x deployment result.
 | Complete cross-corpus switch | 4 balanced roots | 0/4; median final delta `+0.63117` | Equal tokens and exact `1.00x` cost | Close coarse data switch |
 | Disjoint trajectory-anchor initialization | 85M FineWeb-Edu/TinyStories, 6 preserve pairs | 2/6 endpoint wins; combined mean final delta `+0.00023` | Median hard-threshold wall ratio `1.05x` at one deployment; source checkpoint-write time unavailable | Close current same-corpus anchor screen |
 | Same-corpus 25% block mixture | FineWeb 85M/139M, 6 roots | 6/6 durable equal-budget wins; final mean delta `-0.01252` | Exact `1.00x` FLOPs and approximately `1.00x` wall; TinyStories transfer 0/3 final wins | Fixed FineWeb control only; close as general driver route |
-| Fixed shadow stop | 85M/139M and two data sources | Durable mechanism at tested roots | About `1.13x` wall / `1.08x` charged FLOP speedup in prior report | Baseline only, not driver |
+| Fixed shadow stop | Exact matched 85M/139M FineWeb-Edu and TinyStories screen, 12 roots | 11/12 durable endpoint passes; 0 failures; 4/4 strata meet 2/3 rule | `1.1319x` geometric wall / `1.1426x` FLOP / `1.1429x` token ratio including prefix; thresholds non-discriminating | Audited fixed baseline/action family only |
 | Action-conditioned atlas ensemble | Phase-switch seeds 13--14 | Support 2/2, final top-1 `0/2`, safe noop both | Final prediction/reality gap `0.0101` | Gate closed |
 
 The shadow row is retained as a useful fixed baseline; its exact charged
@@ -44,6 +44,17 @@ transfer regresses at the final horizon on 3/3 roots. It therefore does not
 provide a portable action ceiling. The safe action-conditioned model abstains
 when its final-horizon predictions
 are not reliable, including states that were inside its geometric support.
+
+The exact shadow-stop gate is the strongest current fixed mechanism. Its
+candidate branch runs 512 continuation steps and averages the final four
+trajectory snapshots, versus 768 no-op steps from the same 1280-step parent.
+It passes 11/12 fresh endpoint comparisons across two widths and two data
+sources, but the raw pre-average candidate is worse on all 12 roots. The
+reported durable result is therefore a trajectory-averaging macro-action, not
+free early stopping. The existing three parent-relative thresholds all reach
+at the first immediate point for both branches, so no threshold-cost claim is
+made. The full accounting and paired hashes are in
+[`SHADOW_GATE_RESULTS.md`](SHADOW_GATE_RESULTS.md).
 
 Therefore:
 
@@ -89,3 +100,5 @@ been exhausted.
 - `runs/trajectory-low-rank-oracle-fineweb85-r3-v1/manifest.json`
 - `runs/trajectory-low-rank-oracle-fineweb139-r3-v1/manifest.json`
 - `runs/trajectory-low-rank-oracle-tinystories85-r3-v1/manifest.json`
+- `runs/shadow-gate-report-v1.json`
+- `runs/shadow-gate-atlas-v1/manifest.json`

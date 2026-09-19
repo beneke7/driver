@@ -119,7 +119,13 @@ def _horizon_metrics(row: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
     return result
 
 
-def _group_key(row: Mapping[str, Any], case: Mapping[str, Any]) -> tuple[str, str, int, int]:
+def _group_key(row: Mapping[str, Any], case: Mapping[str, Any]) -> tuple[str, str, int]:
+    """Group actions by their matched parent, not by how far they run.
+
+    A macro-action may deliberately stop, jump, or probe at a different
+    horizon.  The parent checkpoint is the causal matching unit; horizon is
+    an action outcome and must remain in the row rather than split the group.
+    """
     before = _mapping(row.get("before"), "transition.before")
     metadata = _mapping(row.get("metadata", {}), "transition.metadata")
     run_id = str(row.get("run_id", "")).strip()
@@ -129,12 +135,7 @@ def _group_key(row: Mapping[str, Any], case: Mapping[str, Any]) -> tuple[str, st
     if not run_id or not source:
         raise ValueError("transition is missing run_id or source checkpoint provenance")
     step = int(before.get("step"))
-    after = row.get("after")
-    if isinstance(after, Mapping):
-        horizon = int(after.get("step")) - step
-    else:
-        horizon = int(metadata.get("target_tokens", -1))
-    return run_id, source, step, horizon
+    return run_id, source, step
 
 
 def _branch_cost(
@@ -426,7 +427,7 @@ def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list
         noop = actions.get("noop")
         if noop is None:
             unmatched += sum(kind != "noop" for kind in actions)
-        group_id = ":".join((key[0], key[1], str(key[2]), str(key[3])))
+        group_id = ":".join((key[0], key[1], str(key[2])))
         for entry in entries:
             row, case, manifest = entry
             if require_matched and str(
@@ -544,6 +545,7 @@ def _self_check() -> None:
             {
                 "transition_id": "text_shard-0:shadow",
                 "action": {"kind": "trajectory_shadow_average", "strength": 0.0, "parameters": {}},
+                "after": {"step": 19},
                 "metadata": dict(common["metadata"], horizon_metrics=[
                     {"name": "immediate", "loss": 1.9},
                     {"name": "recovery", "loss": 1.75},

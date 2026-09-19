@@ -263,6 +263,26 @@ no-op abstention on unsupported roots. The fresh fixed-gate roster and pass
 rule are preregistered in
 [`SHADOW_GATE_PREREGISTRATION.md`](SHADOW_GATE_PREREGISTRATION.md).
 
+The exact matched shadow gate is now complete. Across FineWeb-Edu and
+TinyStories at 85M and 139M, 24/24 branches completed and 11/12 candidate
+endpoints beat or matched their no-op siblings. Every one of the four strata
+met the local 2/3 pass rule. Including the common prefix, the geometric mean
+cost ratios were `1.1319x` wall, `1.1426x` FLOPs, and `1.1429x` tokens. The
+only miss was FineWeb-Edu 139M seed 9. The raw candidate endpoint was worse
+on all 12 roots; the final four-snapshot average supplied the durable
+improvement. This makes snapshot averaging the mechanism under test, not early
+stopping alone. The existing relative thresholds were all reached at the same
+immediate point for both branches, so this is endpoint/cost evidence rather
+than a threshold-cost result. See
+[`SHADOW_GATE_RESULTS.md`](SHADOW_GATE_RESULTS.md).
+
+This promotes the fixed shadow action as a baseline only. A small numerical
+model held out on the complete FineWeb 139M stratum had raw final top-1
+agreement `2/3`, but the calibrated support gate abstained on `3/3`; its safe
+policy did not beat the action-only prior. Parent timing must therefore be
+varied before training a cost-aware selector. Keep no-op fallback and do not
+add a larger steerer, planner, dreaming, or RL rung yet.
+
 ## Direction amendment (2026-09-19): learned trajectory transport
 
 The fixed pulse route is now closed as a promotion path. The next research
