@@ -337,3 +337,11 @@ TinyStories trajectory group and produced badly calibrated absolute scores.
 The gate is therefore not promoted. Collect more matched parent states and
 calibrate a conservative action head before integrating it with the history
 world model.
+
+The same four-way late action set on fresh 85M FineWeb-Edu seed 4 reproduced
+the split: noop `1.47555`, live average `1.48195`, live secant `1.47941`, and
+shadow merged `1.44144` from a raw `1.47578`. The shadow improvement over noop
+was `0.03410`; both live maneuvers were worse after the continuation. This
+raises the paired action archive to two fresh all-action states, while the
+selector remains deliberately unpromoted because its held-out sample is still
+too small for calibration.
