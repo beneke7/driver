@@ -119,3 +119,11 @@ support on both roots but final raw top-1 agreement `0` and prediction/reality
 gap `0.0474`; its safe selected mean is `+0.00065`, versus `+0.00226` for the
 action prior and `0` for the noop oracle. The fixed-pulse speed route is a
 no-go until a different state/action representation explains these failures.
+
+An action-size grid on the two failure roots confirms the ceiling. On seed 13,
+small/medium/large pulses have immediate deltas `-0.00128/-0.00583/-0.01089`
+but final deltas `+0.00025/+0.00173/+0.00264`; on seed 14 the corresponding
+final deltas are `+0.00234/+0.00403/+0.00364`. Every pulse is a durable
+regression on both roots despite an initially favorable response. Immediate
+loss is therefore not a safe proxy for long-horizon action value in this
+landscape.

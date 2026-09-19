@@ -207,3 +207,11 @@ better than the action prior `+0.00226` but worse than noop `0`. The fixed
 pulse route is therefore a no-go for promotion. The next rung should change
 the observed/action geometry or move to a separately audited jump/data-
 allocation hypothesis, not add more pulse-selector variants.
+
+The final action-size check on phase seeds 13--14 confirms the failure mode:
+small, medium, and large pulses all improve immediate loss but all regress at
+the 2048-step final horizon. The route is therefore closed as a fixed pulse
+mechanism. Any future intervention must model long-horizon/recovery response
+directly and reject actions whose transient gain is not durable; the next
+workload moves to an explicitly charged jump/nowcasting or data-allocation
+hypothesis.
