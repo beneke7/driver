@@ -302,6 +302,15 @@ final top-1 agreement `4/9`. This is a correct fail-closed outcome, not a
 transfer result; collect a small changed-regime calibration set before
 retesting the gate.
 
+The frozen changed-regime calibration audit also remains below the gate. Across
+three leave-one-seed-out fits on FineWeb 139M and TinyStories, final top-1 was
+`2/3`, `3/3`, and `3/3`, but the pooled safe selected final mean (`-0.01552`)
+was worse than the action-only prior (`-0.01933`). Recovery selection was safe
+on the selected branches. More steerer capacity is therefore not justified;
+the missing ingredient is causal calibration and a cost-aware all-horizon
+risk objective. See
+[`CHANGED_CALIBRATION_RESULTS.md`](CHANGED_CALIBRATION_RESULTS.md).
+
 ## Direction amendment (2026-09-19): learned trajectory transport
 
 The fixed pulse route is now closed as a promotion path. The next research

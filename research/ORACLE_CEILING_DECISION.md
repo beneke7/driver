@@ -20,6 +20,7 @@ controls; none is a contract-valid 10x deployment result.
 | Action-conditioned atlas ensemble | Phase-switch seeds 13--14 | Support 2/2, final top-1 `0/2`, safe noop both | Final prediction/reality gap `0.0101` | Gate closed |
 | Timing-conditioned shadow gate pilot | FineWeb-Edu 85M, parent steps 768/1280/1792, seeds 21--26 | Complete-seed final holdouts select noop early and shadow late `6/6`; recovery selection regresses on 2/3 fresh seeds | Diagnostic selected wall ratio `1.051x`; final prediction gaps `0.0015--0.0019` | Promising small gate; multi-horizon deployment closed |
 | Changed-regime timing transfer | FineWeb 85M train; FineWeb 139M/TinyStories holdout, 9 groups | Support `0/9`, safe noop `9/9`, raw final top-1 `4/9` | Final prediction/reality gap `0.00431`; oracle mean `-0.01942` | Geometry does not transfer; collect calibration data |
+| Changed-regime calibration | FineWeb 139M/TinyStories, 9 groups; leave-one-seed-out | Final top-1 `2/3`, `3/3`, `3/3`; pooled selected mean `-0.01552` vs prior `-0.01933` | Recovery selected branches safe; prediction gaps `0.0027--0.0037` | No selector gain; do not add capacity |
 
 The shadow row is retained as a useful fixed baseline; its exact charged
 ratios and roster are in
@@ -73,6 +74,11 @@ raw final ranking was only 4/9. This validates the support gate but does not
 validate transfer. A small changed-regime calibration set is required before
 retesting the selector.
 
+The changed-regime calibration audit supplies a small within-regime fit but
+still loses to the action-only prior when pooled. It is a useful safety result,
+not a driver result; a future attempt must improve the cost-aware, all-horizon
+objective before model capacity is increased.
+
 Therefore:
 
 - do not train a larger steerer, pretrained meta-brain, planner, dreaming
@@ -123,3 +129,6 @@ been exhausted.
 - `runs/shadow-timing-grid-atlas-v1/manifest.json`
 - `runs/shadow-timing-transfer-atlas-v1/manifest.json`
 - `runs/shadow-timing-transfer-model-v1/report.json`
+- `runs/changed-calibration-model-seed9-v1/report.json`
+- `runs/changed-calibration-model-seed10-v1/report.json`
+- `runs/changed-calibration-model-seed11-v1/report.json`
