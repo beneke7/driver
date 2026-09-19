@@ -169,6 +169,12 @@ shadow control; otherwise close the allocation family. A coarse
 FineWeb/TinyStories switch has already been tested separately and is not
 reused as evidence for this mixture.
 
+If the FineWeb oracle clears that equal-budget durability screen, run a
+separate transfer check on TinyStories 85M seeds 3--5 with the same 25%
+block schedule and a disjoint tail interval of the TinyStories training file.
+This changed-data check is not pooled with the FineWeb result; it is evidence
+about allocation transfer only.
+
 ## Capability and cost contract
 
 For every held-out case define three thresholds before reading candidate

@@ -258,8 +258,6 @@ def _run_case(
         if alternate_fraction < 1.0
         else _repo_path(alternate_train_file)
     )
-    if alternate_fraction < 1.0 and source_train_file != "data/raw/FineWeb-Edu-train-40m.txt":
-        raise ValueError("same-corpus mixture screen currently requires FineWeb-Edu")
     train_tokens = (
         campaign.final_steps * target.batch_size * (target.context + 1) + 1
     )
@@ -520,7 +518,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--alternate-fraction",
         type=float,
         default=1.0,
-        help="fraction of candidate continuation replaced by alternate data; values below 1 use the disjoint FineWeb mixture screen",
+        help="fraction of candidate continuation replaced by same-corpus tail data; values below 1 use the disjoint block mixture screen",
     )
     parser.add_argument("--self-check", action="store_true")
     return parser
