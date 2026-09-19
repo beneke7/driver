@@ -14,7 +14,6 @@ import argparse
 import gc
 import hashlib
 import json
-import math
 import subprocess
 import time
 from pathlib import Path

@@ -341,6 +341,24 @@ parameter and optimizer-state changes. Do not add planner, dreaming, PPO/SAC,
 or a larger pretrained controller until one of those baselines demonstrates
 held-out durable action ranking within support.
 
+### Naive data-allocation oracle (2026-09-19)
+
+The first data/work screen is complete. From four exact step-1536 parents,
+each candidate consumed the same `12,582,912` tokens as a recomputed AdamW
+no-op but switched the entire future training stream between the local
+FineWeb-Edu and TinyStories byte corpora. There were 0/4 final passes and no
+branch failures. Median loss deltas were `+0.49829` immediate, `+0.60487`
+recovery, and `+0.63117` final; the cost ratio was `1.00x` by construction.
+The recomputed no-op matched the recorded endpoint within `0.00339`, far below
+the switched-data regression. See
+[`DATA_ALLOCATION_RESULTS.md`](DATA_ALLOCATION_RESULTS.md).
+
+This closes complete cross-corpus switching under the current validation
+objectives, not all data allocation. Do not train a selector on it. A further
+allocation experiment needs a predeclared common task objective and a smaller
+action such as an in-domain mixture or work/context schedule; otherwise the
+remaining cheap route is initialization or a rigorously causal action atlas.
+
 ### Passive trajectory corpus and phase model (2026-09-19)
 
 The first normalized passive corpus now contains 17 complete local AdamW roots

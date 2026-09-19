@@ -163,4 +163,11 @@ Only after real selected actions remain calibrated on fresh branches may imagine
 - If early calibration predicts productive runs, combine seed/trajectory screening with transport.
 - If no oracle route has large potential, do not scale the driver; reconsider the 10x mechanism at the initialization, data, or architecture level.
 
+The first simple data-utility screen did not dominate. A complete switch
+between the local FineWeb-Edu and TinyStories streams regressed at all three
+horizons on all four balanced roots, with median final loss delta `+0.63117`
+at equal token cost. This closes that coarse action under the current
+validation objectives; it does not license a claim about finer-grained
+in-domain mixtures.
+
 The project succeeds scientifically by discovering a transferable transport opportunity or by rigorously showing that the observed training states/actions do not contain one. Complexity must be earned by a failed cheaper rung.
