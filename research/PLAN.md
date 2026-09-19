@@ -197,3 +197,13 @@ seed 10 regresses by `+0.281` final loss; the medium pulse improves that seed
 by `-0.450`. The next experiment is a horizon-matched long atlas with more
 roots, followed by held-out selection; do not transfer the short-horizon
 large-pulse policy to this setting.
+
+The horizon-matched expansion to seeds 12--14 closes that speed hypothesis.
+Across six long roots, medium wins 4/6 and has two durable regressions, while
+large wins 3/6 and has three. A model trained on long roots 9--12 and held out
+on 13--14 is supported on both roots but has final raw top-1 agreement `0` and
+prediction/reality gap `0.0474`; its safe selected mean delta `+0.00065` is
+better than the action prior `+0.00226` but worse than noop `0`. The fixed
+pulse route is therefore a no-go for promotion. The next rung should change
+the observed/action geometry or move to a separately audited jump/data-
+allocation hypothesis, not add more pulse-selector variants.

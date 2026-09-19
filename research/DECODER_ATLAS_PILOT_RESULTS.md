@@ -109,3 +109,13 @@ and wall time. This is one landscape and one threshold, not a contract-valid
 promotion result. The large pulse is unsafe for this horizon: it improves
 seeds 9 and 11 but regresses seed 10 by `+0.281` final loss, while the medium
 pulse improves seed 10 by `-0.450`.
+
+Adding long-horizon seeds 12--14 closes the apparent speed result. Across six
+long roots, medium wins 4/6 final branches with mean delta `-0.0757` but has
+two durable regressions; large wins 3/6 with mean delta `+0.0387` and three
+durable regressions. The fresh seeds 13--14 regress under both pulse sizes.
+The horizon-matched model trained on seeds 9--12 and held out on 13--14 has
+support on both roots but final raw top-1 agreement `0` and prediction/reality
+gap `0.0474`; its safe selected mean is `+0.00065`, versus `+0.00226` for the
+action prior and `0` for the noop oracle. The fixed-pulse speed route is a
+no-go until a different state/action representation explains these failures.
