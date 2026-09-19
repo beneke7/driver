@@ -556,3 +556,31 @@ fixed: the 85M holdouts use global step `2176`, while three exact 139M seeds
 use `2048`. This is a useful explicit input for the future driver and gives
 the same action a measurable width-dependent timing signal; it is not yet a
 learned architecture-transfer result.
+
+### Changed-data transfer and timing boundary
+
+The first TinyStories action set used the same 85M target, parent step
+`1536`, four-way action set, and 16-row parent history as the FineWeb runs, but
+changed both the training and validation corpus. The full `2304`-step no-op
+ended at `0.85061`. Live trajectory averaging and extrapolation again hurt,
+ending at `0.85546` and `0.85196`; the shadow average helped modestly at
+`0.84538` (gain `0.00523`). All four branches succeeded.
+
+The useful timing did not transfer. An exact shadow branch stopped at global
+`2048` with loss `0.86998` and `47.69s` of marginal wall time, versus the
+full no-op's `0.85061` and `66.82s`. Stopping at `2176` produced `0.88655` in
+`58.57s`. These candidates save `33.25%` and `16.60%` of branch FLOPs,
+respectively, but neither reaches the full no-op quality target. The full
+`2304` shadow result is therefore an endpoint improvement, not a compute
+shortcut on this corpus. This is a clean negative transfer result for the
+current open-loop timing rule.
+
+An offline selector trained on the FineWeb 85M/139M history archive had zero
+support on the TinyStories parent. Its raw prediction was wrong (test RMSE
+`0.185` and predicted a positive shadow delta), so the support gate abstained;
+the explicit promoted-shadow fallback still selected shadow and realized the
+`0.00523` gain. The fixed action prior from FineWeb expected a `0.03572` gain,
+which makes the changed-data result a useful warning against treating action
+identity as transferable knowledge. The next driver must learn timing and
+calibrate its expected gain on held-out data regimes, not merely recognize the
+shadow action.
