@@ -408,8 +408,9 @@ ridge predictor with a leave-one-seed-out split was used as the deliberately
 cheap gate. With a low threshold it attempted an early `2048` stop and failed
 on one fresh seed; with a conservative `0.005` predicted-gain threshold it
 abstained to `2176` on all fresh seeds and did not beat the fixed rule. The
-correct next investment is therefore more matched action states and
-action-conditioned labels, not a deeper policy or imagined rollout yet.
+This was a data ceiling rather than a reason to add a deeper policy, so the
+next investment was matched action states and action-conditioned labels, not
+imagined rollout.
 
 ### Action archive expansion
 
@@ -435,3 +436,17 @@ a 512-step continuation to 2304. No-op ended at `1.47774`, live average at
 `1.47745`. The same qualitative split held, so the shadow mechanism survives
 a changed decision time. The next selector test should include this later
 parent and report whether telemetry improves over the action-only prior.
+
+The first such comparison used action-only versus action-plus-parent-telemetry
+ridge heads. Both selected shadow on held-out seeds 9, 10, and 11. Action-only
+prediction RMSEs were `0.00091`, `0.00127`, and `0.00138`; adding telemetry
+gave `0.00207`, `0.00212`, and `0.00878`, respectively. With this archive,
+the state features add variance but no decision value: the selector has learned
+the action prior, not a state-dependent intervention rule.
+
+A bounded secant scan over the saved shadow buffers also tested alphas
+`0.0625`, `0.125`, and `0.25` at global steps 2048 and 2176 on seeds 6–10.
+Every positive alpha was worse than alpha zero at both checkpoints. Keep
+secant extrapolation as a negative control and retain plain window-2 averaging
+as the only promoted endpoint action until a learned action-conditioned model
+beats it on fresh states.
