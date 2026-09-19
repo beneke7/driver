@@ -57,6 +57,14 @@ action-only prior. The safe fallback correctly abstained on the unsupported
 changed-regime and delayed-copy cases. No MPC, dreaming, online learning, or
 RL rung is justified yet.
 
+The model representation was then expanded with telemetry already present in
+the archive: loss slope, batch context, role-specific gradient/update norms,
+and the role-specific histories. On the held-out FineWeb split this reduced
+the selected final delta from `+0.00112` to `+0.00038`, but on held-out
+TinyStories the safe policy still abstained while the action-only prior was
+`-0.00161`. The feature change is retained as a diagnostic, not as evidence
+of a transferable selector.
+
 ## Reproduction
 
 The core artifacts are ignored run outputs so large checkpoints do not enter
@@ -76,3 +84,28 @@ The next rung is more roots and better final-horizon representation/action
 ranking. Do not turn the current small FineWeb pulse effect into a speedup
 claim or deploy the selector until it beats the action-only prior on fresh
 roots with durable outcomes and charged costs.
+
+## Phase-switch extension
+
+The existing synthetic `phase_switch` landscape was run with the same 85M
+AdamW target and six fresh roots, using noop, small/medium/large role pulses,
+and damping. Every branch completed. Across the six roots, the medium pulse
+improved all six final branches (mean final delta `-0.00434`, zero durable
+regressions); the large pulse improved five of six (mean `-0.00581`, one
+durable regression). Both also improved immediate and recovery loss on
+average. This is a durable equal-token response, not a speedup.
+
+A model trained on phase roots 3--6 and tested on roots 7--8 selected the
+large pulse at all three horizons and matched the realized best action on both
+roots. It matched the fixed action prior, so this is transfer of a stable
+macro-action rather than evidence of state-dependent gain.
+
+Three fresh long-horizon roots (seeds 9--11; 128 immediate, 512 recovery,
+2048 final) give a useful speed diagnostic. The medium pulse reaches the
+matched noop branch's final validation loss by recovery on all three roots and
+remains at or below it at final. Including the common prefix, the per-root
+noop-final to medium-recovery ratios are approximately `1.75x` by both FLOPs
+and wall time. This is one landscape and one threshold, not a contract-valid
+promotion result. The large pulse is unsafe for this horizon: it improves
+seeds 9 and 11 but regresses seed 10 by `+0.281` final loss, while the medium
+pulse improves seed 10 by `-0.450`.

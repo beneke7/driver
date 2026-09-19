@@ -176,3 +176,24 @@ trained on four roots and tested on seeds 7--8 has support on both roots, yet it
 selected final delta is `+0.00168` versus `+0.00112` for the action-only prior
 and `-0.00059` for the oracle. Support is therefore necessary but not
 sufficient; the final-horizon selection gate remains closed.
+
+### Phase-switch response and long-horizon checkpoint (2026-09-19)
+
+The phase-switch extension provides the first stronger mechanism signal. Six
+roots with the five-action pulse roster show mean final deltas of `-0.00434`
+for the medium pulse (6/6 wins, zero durable regressions) and `-0.00581` for
+the large pulse (5/6 wins, one durable regression). A phase-only model trained
+on roots 3--6 and held out on roots 7--8 ranks the large pulse correctly at
+immediate, recovery, and final horizons, but only matches the action prior.
+
+The longer phase-switch diagnostic uses fresh seeds 9--11 and a 2048-step
+final horizon. The medium pulse reaches the matched noop branch's final loss
+by the 512-step recovery point on all three roots and remains no worse at the
+final point. After charging the common 1536-step prefix, this is about `1.75x`
+lower FLOP and wall cost to that one baseline-derived threshold. It is not the
+10x gate: one landscape, one threshold, equal-action costs, and no policy
+selection were involved. The large pulse is not safe at this horizon because
+seed 10 regresses by `+0.281` final loss; the medium pulse improves that seed
+by `-0.450`. The next experiment is a horizon-matched long atlas with more
+roots, followed by held-out selection; do not transfer the short-horizon
+large-pulse policy to this setting.
