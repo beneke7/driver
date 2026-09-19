@@ -1,0 +1,138 @@
+# Decoder landscape-driver preregistration
+
+Status: preregistered before the next decisive atlas or policy experiment.
+
+This document fixes the claim boundary for the decoder optimization track. It
+does not retroactively promote the existing Muon/shadow screens. Those screens
+remain mechanism evidence and development data.
+
+## Primary question
+
+Can a driver compress a decoder training state into a transferable
+action-response representation and reach the same held-out capability as a
+matched AdamW/no-op continuation at no more than one tenth of its valid total
+deployment cost?
+
+The initial target optimizer is AdamW. Muon and other optimizers are secondary
+baselines or separate optimization-track controls; their results cannot be
+used to claim a driver beat AdamW.
+
+## Unit of evidence
+
+One case is a complete target run identified by landscape, seed, architecture,
+data version, objective, and code revision. One decision is a branch from an
+immutable parent checkpoint. The parent must preserve model parameters,
+optimizer/scheduler/scaler state, Python/CPU/CUDA RNG, data cursor,
+configuration, dataset, objective, and code hashes.
+
+The canonical response is recorded at three predeclared horizons:
+
+```text
+R(s,a) = (immediate, recovery, final, cost, risk)
+```
+
+Each loss response is reported both absolutely and as a delta from the matched
+no-op branch. A branch is unsafe when it fails, becomes non-finite, or has a
+positive maximum loss delta across immediate, recovery, and final horizons.
+Transient improvement is never sufficient evidence.
+
+## Canonical actions
+
+The first atlas roster is deliberately finite:
+
+1. `noop`: ordinary AdamW continuation;
+2. `role_pulse_small`, `role_pulse_medium`, `role_pulse_large`: bounded
+   learning-rate/update pulses with explicit attention, MLP, embedding, norm,
+   and head multipliers;
+3. `momentum_extrapolate_small` and `momentum_extrapolate_medium`:
+   update-space directions from initialized AdamW moments;
+4. `damping`: bounded cooling of the base update;
+5. `momentum_state_blend`: a declared moment interpolation, never an implicit
+   reset;
+6. `low_rank_probe`: a bounded structured direction whose probe and recovery
+   work are charged;
+7. `shadow_average`: endpoint-only trajectory rectification; it is not a live
+   training skip and must not be mixed with live macro-actions in analysis;
+8. `jump_or_skip`: a separate hypothesis that must account for data exposure,
+   cursor movement, state handling, and all recovery work.
+
+The first implementation need not execute every action in one campaign. An
+action is admitted to a policy comparison only after its branch implementation
+has a self-check and complete cost/provenance record. Unsupported actions stay
+out of the deployment claim rather than being assigned a synthetic outcome.
+
+## Atlas and model split
+
+The response atlas is built from real matched branches. Development roots may
+fit normalization, predictors, and action priors. A held-out root is never
+used to fit weights, calibrate an uncertainty radius, choose a stop horizon,
+or select a fallback before its locked evaluation.
+
+The first world model is a small numerical history model or ensemble. It must
+predict action-conditioned immediate, recovery, and final deltas plus an
+uncertainty or support estimate. Its first gate is predictive, not speed-based:
+
+- beat a constant/action-only prior on held-out action ranking;
+- report RMSE, rank regret, calibration, support/abstention rate, and the
+  prediction-versus-reality gap;
+- preserve `noop` as the fallback when support or risk is insufficient.
+
+No PPO, SAC, CEM, beam search, imagined policy training, pretrained language
+backbone, or recursive online core update is admissible before that gate is
+met on complete held-out roots. Imagined transitions are proposals only and
+never evidence.
+
+## Capability and cost contract
+
+For every held-out case define three thresholds before reading candidate
+results: the matched AdamW/no-op validation loss at the predeclared easy,
+middle, and hard global checkpoints. The evaluator records the first point at
+which the candidate reaches a threshold and remains at or below it through its
+declared horizon. A run that never reaches a threshold is a visible failure.
+
+Deployment cost includes, without exception:
+
+- target training FLOPs and consumed tokens;
+- driver inference and online-update work;
+- probes, trajectory storage/merge, evaluation, and recovery;
+- rejected or failed branches used by the deployed policy;
+- wall-clock time from the common initialization, including the shared prefix.
+
+One-time meta-training and search costs are separate ledger entries and are
+amortized only over a stated deployment count. No data exposure, evaluation,
+recovery, or failed run may be omitted to improve a ratio.
+
+For threshold `Q*`, report
+
+```text
+S(Q*) = C_adamw_noop(Q*) / C_driver(Q*)
+```
+
+The robust 10x gate is eligible only when all of the following hold on the
+locked promotion roster:
+
+- at least five held-out landscapes, three fresh seeds per landscape, and
+  three thresholds, or a preregistered equivalent;
+- at least one changed data mixture or architecture condition;
+- complete matched coverage and zero catastrophic driver failures;
+- every per-case/per-threshold wall-cost ratio is at least 10.0;
+- every landscape median and seed median is at least 10.0;
+- geometric mean is at least 10.0 and the declared clustered 95% lower bound
+  is at least 10.0;
+- the same gates pass for any additionally declared gated metric.
+
+The repository evaluator remains the source of truth for aggregation and
+fail-closed behavior. If a future campaign changes thresholds or metrics, the
+contract and this preregistration must be updated before candidate results are
+opened.
+
+## Stopping rules and next rung
+
+The atlas rung stops when a held-out action-ranking experiment either meets
+the predictive gate above or shows that the current telemetry/action set has
+no useful support. A negative result means revise observations or actions;
+it does not justify a larger steerer. Add a recurrent model only when an
+explicit-history MLP loses at matched driver cost because of nonlocal memory.
+Add imagined planning only after selected model actions remain calibrated on
+fresh real branches. The 10x claim is not made if any gate fails; the report
+must state the strongest durable ratio and its limiting factor.

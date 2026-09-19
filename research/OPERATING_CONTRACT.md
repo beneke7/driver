@@ -51,3 +51,7 @@ result path and validation command in the handoff. Keep the repository clean
 before long campaigns so manifests identify the exact code revision. Pause only
 for explicit user instruction, a hardware-safety issue, corrupted provenance,
 or a genuinely missing authority that changes the experiment's meaning.
+
+The decoder-specific robust 10x definition and preregistered action/atlas
+boundary live in `research/DECODER_DRIVER_PREREGISTRATION.md`; do not infer a
+decoder promotion claim from the synthetic quadratic contract.

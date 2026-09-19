@@ -80,3 +80,14 @@ The current controller groups experience by action kind and ignores telemetry
 geometry. That is intentional: it is a cheap control condition, not the
 proposed deep driver. Upgrade it only when the fixed comparison shows that
 state-dependent information is available and the baseline cannot use it.
+
+## Decoder driver preregistration
+
+The decoder-specific claim, action roster, atlas split, capability thresholds,
+cost ledger, and robust 10x gate are fixed in
+[`DECODER_DRIVER_PREREGISTRATION.md`](DECODER_DRIVER_PREREGISTRATION.md).
+The next implementation rung is the response atlas built from existing
+matched campaign transitions, followed by a held-out action-conditioned
+predictor. A policy is not promoted until it beats the action-only prior on
+fresh roots; the fixed shadow baseline remains a mechanism control, not a
+driver claim.

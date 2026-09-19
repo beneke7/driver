@@ -247,3 +247,21 @@ The first screen is summarized in
 [research/HISTORY_JUMP_RESULTS.md](research/HISTORY_JUMP_RESULTS.md). It
 rejects a global momentum pulse and motivates a history-conditioned safe
 selector.
+
+## Response atlas
+
+Matched decoder campaign branches can be normalized into a causal
+action-response atlas without inventing counterfactuals:
+
+```bash
+.venv/bin/python -m driver.response_atlas \
+  --results runs/<matched-campaign> \
+  --require-matched \
+  --output runs/response-atlas
+```
+
+Each `atlas.jsonl` row retains immediate, recovery, and final deltas against
+the matched no-op, end-to-end cost components, failure/risk fields, and
+checkpoint/config/data/objective provenance. The decoder-specific 10x gate is
+preregistered in
+[research/DECODER_DRIVER_PREREGISTRATION.md](research/DECODER_DRIVER_PREREGISTRATION.md).
