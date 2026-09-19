@@ -59,7 +59,11 @@ TRAJECTORY_STRATEGIES = (
     "trajectory_average_reset",
     "trajectory_extrapolate_reset",
 )
-SHADOW_STRATEGIES = ("trajectory_shadow_average", "trajectory_shadow_pulse")
+SHADOW_STRATEGIES = (
+    "trajectory_shadow_average",
+    "trajectory_shadow_pulse",
+    "trajectory_shadow_stop",
+)
 PULSE_STRATEGIES = (
     "role_pulse_small",
     "role_pulse_medium",
@@ -67,6 +71,8 @@ PULSE_STRATEGIES = (
 )
 ALL_STRATEGIES = STRATEGIES + TRAJECTORY_STRATEGIES + SHADOW_STRATEGIES + PULSE_STRATEGIES + ("damping",)
 QUALITY_FACTORS = (0.995, 0.99, 0.98)
+SHADOW_STOP_RECOVERY_STEPS = 384
+SHADOW_STOP_FINAL_STEPS = 512
 
 
 @dataclass(frozen=True)
@@ -508,6 +514,7 @@ def _proposals(
         "trajectory_extrapolate_reset": "trajectory_extrapolate_reset",
         "trajectory_shadow_average": "noop",
         "trajectory_shadow_pulse": "role_pulse",
+        "trajectory_shadow_stop": "noop",
         "role_pulse_small": "role_pulse_small",
         "role_pulse_medium": "role_pulse_medium",
         "role_pulse_large": "role_pulse_large",
@@ -877,6 +884,21 @@ def _reset_adam_moments(optimizer: torch.optim.Optimizer) -> int:
     return reset_count
 
 
+def _branch_horizons(
+    strategy: str, campaign: CampaignConfig
+) -> tuple[int, int, int]:
+    if strategy == "trajectory_shadow_stop":
+        if not (
+            campaign.immediate_steps <= SHADOW_STOP_RECOVERY_STEPS < SHADOW_STOP_FINAL_STEPS
+            < campaign.final_steps
+        ):
+            raise ValueError(
+                "shadow-stop requires immediate <= 384 < 512 < final_steps"
+            )
+        return campaign.immediate_steps, SHADOW_STOP_RECOVERY_STEPS, SHADOW_STOP_FINAL_STEPS
+    return campaign.immediate_steps, campaign.recovery_steps, campaign.final_steps
+
+
 def _branch(
     *,
     proposal: Proposal,
@@ -921,6 +943,9 @@ def _branch(
         shadow_raw_final_loss: float | None = None
         shadow_snapshots: list[Path] = []
         shadow_snapshot_steps: set[int] = set()
+        immediate_steps, recovery_steps, final_steps = _branch_horizons(
+            proposal.strategy, campaign
+        )
         if proposal.strategy in SHADOW_STRATEGIES:
             if branch_output is None:
                 raise ValueError("shadow strategy requires a branch output directory")
@@ -929,11 +954,11 @@ def _branch(
             shadow_snapshot_steps = set(
                 range(
                     campaign.trajectory_interval,
-                    campaign.final_steps + 1,
+                    final_steps + 1,
                     campaign.trajectory_interval,
                 )
             )
-            shadow_snapshot_steps.add(campaign.final_steps)
+            shadow_snapshot_steps.add(final_steps)
         if proposal.strategy in TRAJECTORY_STRATEGIES:
             maneuver = _apply_trajectory_maneuver(
                 model,
@@ -967,9 +992,9 @@ def _branch(
         ]
         consumed_tokens = 0
         phase_steps = (
-            campaign.immediate_steps,
-            campaign.recovery_steps,
-            campaign.final_steps,
+            immediate_steps,
+            recovery_steps,
+            final_steps,
         )
         phase_names = ("immediate", "recovery", "final")
         previous = 0
@@ -1090,14 +1115,14 @@ def _branch(
         recovery_flops = _flops(
             target_config,
             model,
-            (campaign.recovery_steps - campaign.immediate_steps)
+            (recovery_steps - immediate_steps)
             * target_config.batch_size
             * target_config.context,
         )
         _sync(device)
         wall_seconds = time.perf_counter() - started
         after = Observation(
-            step=target_config.prefix_steps + campaign.final_steps,
+            step=target_config.prefix_steps + final_steps,
             tokens=before.tokens + target_tokens,
             loss=final_loss,
             quality=-final_loss,
@@ -1123,11 +1148,15 @@ def _branch(
             "trajectory_average_reset": 6.0,
             "trajectory_extrapolate_reset": 7.0,
             "trajectory_shadow_average": 8.0,
+            "trajectory_shadow_stop": 13.0,
         }
         action_parameters = {
             "predicted_gain": proposal.predicted_gain,
             "uncertainty": proposal.uncertainty,
             "schedule_code": schedule_codes[selected_schedule],
+            "immediate_steps": immediate_steps,
+            "recovery_steps": recovery_steps,
+            "final_steps": final_steps,
         }
         if selected_schedule in {"role_pulse", *PULSE_STRATEGIES}:
             _, pulse_roles = _schedule_multipliers(
@@ -1191,6 +1220,11 @@ def _branch(
             metadata={
                 "strategy": proposal.strategy,
                 "selected_schedule": selected_schedule,
+                "effective_horizons": {
+                    "immediate_steps": immediate_steps,
+                    "recovery_steps": recovery_steps,
+                    "final_steps": final_steps,
+                },
                 "prediction": {
                     "gain": proposal.predicted_gain,
                     "uncertainty": proposal.uncertainty,

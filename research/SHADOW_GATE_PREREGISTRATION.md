@@ -24,12 +24,14 @@ roster.
 
 ## Matched branches
 
-For each root, run two separate campaigns from the same deterministic parent
-configuration and verify the parent checkpoint hash, data hash, config hash,
-and code revision before comparison:
+For each root, run one campaign containing both branches. This is important:
+the campaign creates one immutable parent and both actions fork it, so the
+parent checkpoint, configuration hash, data hash, RNG state, and code
+revision are genuinely shared. The branch horizons are:
 
 - `noop`: prefix 1280, immediate 128, recovery 512, final 768;
-- `shadow_stop_512`: prefix 1280, immediate 128, recovery 384, final 512,
+- `trajectory_shadow_stop`: the same campaign config, but effective immediate
+  128, recovery 384, final 512,
   with trajectory interval 128, window 2, and alpha 0.25.
 
 Both branches preserve the full AdamW parent state, RNG, and data cursor. The
@@ -65,23 +67,16 @@ general mechanism; it does not justify a larger selector.
 
 ## Reproduction commands
 
-Replace `<data>` and the width-specific model arguments as shown below. The
-full and stop campaigns must be run into separate empty output directories:
+Replace `<data>` and the width-specific model arguments as shown below. Each
+stratum uses one empty output directory and both strategies:
 
 ```bash
 uv run python -m driver.decoder_campaign \
-  --output runs/shadow-gate-<data>-<width>-full-s9-11 \
+  --output runs/shadow-gate-<data>-<width>-s9-11 \
   --landscape phase_switch --seed 9 --seed 10 --seed 11 \
-  --strategy noop --prefix-steps 1280 --immediate-steps 128 \
+  --strategy noop --strategy trajectory_shadow_stop \
+  --prefix-steps 1280 --immediate-steps 128 \
   --recovery-steps 512 --final-steps 768 \
-  --trajectory-interval 128 --trajectory-window 2 --trajectory-alpha 0.25 \
-  --train-file <train-file> --validation-file <validation-file>
-
-uv run python -m driver.decoder_campaign \
-  --output runs/shadow-gate-<data>-<width>-stop-s9-11 \
-  --landscape phase_switch --seed 9 --seed 10 --seed 11 \
-  --strategy trajectory_shadow_average --prefix-steps 1280 \
-  --immediate-steps 128 --recovery-steps 384 --final-steps 512 \
   --trajectory-interval 128 --trajectory-window 2 --trajectory-alpha 0.25 \
   --train-file <train-file> --validation-file <validation-file>
 ```
