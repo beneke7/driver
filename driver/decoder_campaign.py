@@ -60,7 +60,12 @@ TRAJECTORY_STRATEGIES = (
     "trajectory_extrapolate_reset",
 )
 SHADOW_STRATEGIES = ("trajectory_shadow_average", "trajectory_shadow_pulse")
-ALL_STRATEGIES = STRATEGIES + TRAJECTORY_STRATEGIES + SHADOW_STRATEGIES
+PULSE_STRATEGIES = (
+    "role_pulse_small",
+    "role_pulse_medium",
+    "role_pulse_large",
+)
+ALL_STRATEGIES = STRATEGIES + TRAJECTORY_STRATEGIES + SHADOW_STRATEGIES + PULSE_STRATEGIES + ("damping",)
 QUALITY_FACTORS = (0.995, 0.99, 0.98)
 
 
@@ -497,6 +502,10 @@ def _proposals(
         "trajectory_extrapolate_reset": "trajectory_extrapolate_reset",
         "trajectory_shadow_average": "noop",
         "trajectory_shadow_pulse": "role_pulse",
+        "role_pulse_small": "role_pulse_small",
+        "role_pulse_medium": "role_pulse_medium",
+        "role_pulse_large": "role_pulse_large",
+        "damping": "damping",
     }
     shallow_score = (
         -parent_features["loss_slope"]
@@ -545,8 +554,16 @@ def _schedule_multipliers(
     campaign: CampaignConfig,
     runtime: dict[str, Any],
 ) -> tuple[float, dict[str, float]]:
-    if schedule == "role_pulse" and step < campaign.immediate_steps:
-        return 1.0, {"attention": campaign.pulse_attention, "mlp": campaign.pulse_mlp}
+    if schedule in {"role_pulse", *PULSE_STRATEGIES} and step < campaign.immediate_steps:
+        pulse = {
+            "role_pulse": (campaign.pulse_attention, campaign.pulse_mlp),
+            "role_pulse_small": (1.10, 0.90),
+            "role_pulse_medium": (1.50, 0.50),
+            "role_pulse_large": (2.00, 0.25),
+        }[schedule]
+        return 1.0, {"attention": pulse[0], "mlp": pulse[1]}
+    if schedule == "damping" and step < campaign.immediate_steps:
+        return 0.80, {}
     if schedule == "open_loop":
         span = max(1, campaign.immediate_steps)
         fraction = min(1.0, step / span)
@@ -1039,7 +1056,9 @@ def _branch(
             target_config,
             model,
             target_tokens,
-            campaign.immediate_steps if selected_schedule == "role_pulse" else 0,
+            campaign.immediate_steps
+            if selected_schedule in {"role_pulse", *PULSE_STRATEGIES}
+            else 0,
         )
         parameter_count = sum(parameter.numel() for parameter in model.parameters())
         evaluation_flops = 2.0 * parameter_count * target_config.batch_size * target_config.context * (
@@ -1073,6 +1092,10 @@ def _branch(
         schedule_codes = {
             "noop": 0.0,
             "role_pulse": 1.0,
+            "role_pulse_small": 9.0,
+            "role_pulse_medium": 10.0,
+            "role_pulse_large": 11.0,
+            "damping": 12.0,
             "open_loop": 2.0,
             "online_lr_control": 3.0,
             "trajectory_average": 4.0,
