@@ -600,3 +600,20 @@ plus the TinyStories 85M root had full support on the TinyStories 139M root,
 but its predicted shadow delta was still positive (`+0.00193`, RMSE
 `0.00759`). The conservative risk gate therefore abstained and the explicit
 shadow fallback realized the `0.00982` gain. Support alone is not calibration.
+
+### Direct nowcasting negative control
+
+To test an actual skip rather than an earlier stopping point, the 85M
+TinyStories parent at global step `1536` was replaced immediately by a
+two-window secant prediction and evaluated as if it were the `2304` endpoint.
+The full no-op endpoint is `0.85061`; secant strengths `0.25`, `0.5`, `1`,
+`2`, `3`, and `4` produced losses `0.91128`, `0.92722`, `1.00218`, `1.40364`,
+`2.01555`, and `2.55956`. Relative displacement energy grew from `0.10` to
+`23.72` across that scan.
+
+This rejects the current two-window linear extrapolator as a skip mechanism:
+it does not predict a useful future weight state, and larger jumps become
+unstable quickly. It does not reject a learned nowcaster, but that model must
+be trained against future state or decision-relevant outcomes and calibrated
+before it is allowed to bypass real training. The existing live extrapolation
+action remains a low-cost negative control, not a claimed speedup.
