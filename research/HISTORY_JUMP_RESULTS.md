@@ -871,3 +871,19 @@ also ranked shadow correctly but its support gate abstained on all three roots
 (support distance about `21.7` versus radius `6.0`). The fixed action transfers;
 the learned state geometry does not yet. Keep no-op as the fallback and test a
 width holdout before adding a larger steerer.
+
+### 139M width holdout
+
+The same parent-1280 equal-budget screen was then run on the existing 139M
+configuration (`width=1024`, `layers=11`, `heads=16`) with TinyStories seeds
+6--8. Shadow final deltas were `-0.05543`, `-0.05427`, and `-0.05203`; all
+three branches improved while immediate and recovery changes remained near
+zero. The exact cost-to-quality fork stopped after 512 continuation steps and
+beat the matched 768-step noop endpoint by `0.03169`, `0.02568`, and
+`0.02098`, respectively. End-to-end wall was about `11.3--11.4%` lower and
+charged FLOPs about `7.7%` lower on all three roots.
+
+This is width transfer of the fixed mechanism, not evidence for a learned
+driver or a 10x result. It strengthens the case for a small timing/cost gate;
+the next gate must include the stop horizon as an action and keep no-op as a
+contract-safe fallback.

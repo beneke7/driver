@@ -249,3 +249,14 @@ the learned state geometry has not transferred. Promote the fixed rule only as
 an audited baseline; next test the same early-stop rule at the 139M width
 holdout, then add duration/cost to the action-conditioned gate. Do not add a
 larger steerer yet.
+
+The 139M TinyStories width holdout is now complete. Equal-budget shadow deltas
+on seeds 6--8 were `-0.05543`, `-0.05427`, and `-0.05203`; the 512-step
+candidate beat the full 768-step noop by `0.02098--0.03169` on all three,
+with about `11.3--11.4%` lower end-to-end wall and `7.7%` lower charged FLOPs.
+The fixed shadow-stop mechanism therefore transfers across the two tested
+widths and data sources. It remains a baseline result at roughly `1.13x`, not
+the 10x contract gate and not a learned policy. The next rung is a minimal
+cost-aware action gate over `{noop, shadow-stop-512, shadow-full-768}`; train
+it only after the duration is represented in the response atlas, and preserve
+no-op abstention on unsupported roots.
