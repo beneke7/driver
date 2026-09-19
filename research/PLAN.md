@@ -167,3 +167,12 @@ raw top-1 agreement on the one held-out root, but support is still zero and the
 safe policy abstains. This is a useful ranking diagnostic, not deployment
 evidence; the atlas needs more roots before its support calibration can be
 relaxed.
+
+The FineWeb expansion adds pulse-only roots 6--8, giving six FineWeb roots for
+the within-regime check. Large pulses win 5/6 final branches with mean delta
+`-0.00090`, and small pulses win 4/6 with mean delta `-0.00018`, but both remain
+immediate-loss regressions and one large-pulse branch regresses durably. A model
+trained on four roots and tested on seeds 7--8 has support on both roots, yet its
+selected final delta is `+0.00168` versus `+0.00112` for the action-only prior
+and `-0.00059` for the oracle. Support is therefore necessary but not
+sufficient; the final-horizon selection gate remains closed.
