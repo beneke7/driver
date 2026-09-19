@@ -792,6 +792,13 @@ The shortcut is therefore not a universal training accelerator. Any future
 driver must gate it on observed regime and trajectory features, with the
 full-length baseline as the safe fallback.
 
+The second 139M FineWeb root also passed: seed 4 moved from `1.32822` in the
+full no-op to `1.32386` in the exact 512-step shadow fork. Branch wall time
+fell from `105.71s` to `74.93s`; after the shared prefix this is approximately
+`9.8%` lower end-to-end wall time. The current fixed action is therefore 5/5
+positive on FineWeb across the two target widths, while remaining explicitly
+unvalidated outside that data regime.
+
 The width-transfer screen used the same exact-parent protocol at 139M
 (`1024` width, `11` layers). The full Muon no-op ended at `1.32948` in
 `105.66s` of branch time; the 512-step shadow fork ended at `1.32281` in
