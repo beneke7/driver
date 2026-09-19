@@ -165,6 +165,14 @@ layer/gradient/curvature directions and a new costed probe; otherwise the
 next efficient hypothesis is data/work allocation rather than parameter
 transport.
 
+The complete-state sanity control subsequently showed that the earlier
+`future_optimizer_state_unavailable` flag was a real provenance limitation,
+not a hidden 10x opportunity. Complete step-2048 checkpoints restored
+parameters, AdamW state, RNG, and cursor on four balanced roots; resumed loss
+stayed within `0.000891` of direct continuation, below the `0.003392`
+recomputed-noop variation. Conservative accounting remained `1.000145x`.
+Details are in [FULL_STATE_TRANSPORT_RESULTS.md](FULL_STATE_TRANSPORT_RESULTS.md).
+
 ## Role-wise hindsight oracle screen
 
 Before closing role-wise transport, the full future-weight oracle was split

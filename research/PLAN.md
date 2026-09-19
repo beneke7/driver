@@ -359,6 +359,22 @@ allocation experiment needs a predeclared common task objective and a smaller
 action such as an in-domain mixture or work/context schedule; otherwise the
 remaining cheap route is initialization or a rigorously causal action atlas.
 
+### Complete-state transport sanity control (2026-09-19)
+
+The state-consistency gap in the earlier future-weight oracle is now measured.
+On the same four balanced roots, a complete checkpoint saved at step 2048
+(parameters, AdamW state, RNG, cursor, hashes, and parent provenance) resumed
+the remaining 256 steps with maximum loss gaps of `0.000214`, `0.000891`,
+`0.000069`, and `0.000318`. The strict `1e-5` replay check was 0/4 because
+CUDA/AMP replay is not bitwise deterministic, but every gap was below the
+independent recomputed-noop variation of `0.003392`, and all checkpoint loads
+validated. The ideal free-state ratio is `1.286x`; conservative accounting of
+the 512 steps needed to create the state is `1.000145x`.
+
+This closes the optimizer-state provenance gap without reopening the transport
+promotion path. See
+[`FULL_STATE_TRANSPORT_RESULTS.md`](FULL_STATE_TRANSPORT_RESULTS.md).
+
 ### Passive trajectory corpus and phase model (2026-09-19)
 
 The first normalized passive corpus now contains 17 complete local AdamW roots
