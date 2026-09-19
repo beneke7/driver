@@ -488,6 +488,16 @@ also passed: early `1.50529` versus no-op `1.50885`, with `68.79s` versus
 139M seeds. Charging each shared prefix in wall time gives end-to-end savings
 of `9.81%`, `9.58%`, and `9.78%` (mean `9.72%`) on seeds 2–4.
 
+### Earlier-parent timing failure
+
+The 139M seed-7 earlier-parent test moved the common parent to global step
+`1024`, then compared a shadow endpoint at `2048` with a full no-op to `2304`.
+The exact-parent candidate ended at `1.50251` versus `1.50015` for no-op. It
+saved `20.0%` of branch compute and `9.05%` end-to-end wall time, but failed
+the same-quality requirement. This rules out moving the 2048 shadow rule
+earlier as an open-loop shortcut; the useful timing depends on the trajectory
+state and path, which is the remaining learned-driver problem.
+
 ### History-enabled action states
 
 After adding the last 16 parent telemetry rows to each branch record, three
