@@ -295,6 +295,13 @@ gate is closed. This is evidence for a conservative timing-aware gate, not a
 reason to scale the steerer. See
 [`SHADOW_TIMING_GRID_RESULTS.md`](SHADOW_TIMING_GRID_RESULTS.md).
 
+The changed-regime transfer check is closed as a deployment path for now. A
+model trained on the nine FineWeb 85M timing roots saw zero support on the
+held-out FineWeb 139M/TinyStories roots, abstained on all nine, and had raw
+final top-1 agreement `4/9`. This is a correct fail-closed outcome, not a
+transfer result; collect a small changed-regime calibration set before
+retesting the gate.
+
 ## Direction amendment (2026-09-19): learned trajectory transport
 
 The fixed pulse route is now closed as a promotion path. The next research

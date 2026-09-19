@@ -61,13 +61,29 @@ The exact model artifacts are:
 - `runs/shadow-timing-grid-model-seed25-v1/report.json` and `world_model.pt`;
 - `runs/shadow-timing-grid-model-seed26-v1/report.json` and `world_model.pt`.
 
+## Changed-regime transfer
+
+The timing atlas was then combined with the locked FineWeb-Edu 139M,
+TinyStories 85M, and TinyStories 139M middle-timing roots. Training used the
+nine FineWeb-Edu 85M roots only; all nine changed data/width roots were held
+out as complete groups. The model marked `0/9` held-out groups as supported,
+selected no-op on `9/9`, and had raw final top-1 agreement `4/9`. Final
+prediction/reality gap was `0.00431`, while the hindsight oracle mean delta was
+`-0.01942`. The safe abstention is correct behavior, but the action geometry
+does not transfer yet.
+
+Artifact: `runs/shadow-timing-transfer-model-v1/report.json` and
+`world_model.pt`; the combined 18-group atlas is
+`runs/shadow-timing-transfer-atlas-v1/atlas.jsonl`.
+
 ## Decision
 
 Go to the next small-model experiment: retain the two-action response atlas,
-add a cost-aware multi-horizon risk rule, and validate it on changed data or
-width. Do not scale the steerer. The timing grid has shown that a state-aware
-gate may add value over the action-only prior, but the recovery failure and
-single-regime scope keep the deployment gate closed.
+add a cost-aware multi-horizon risk rule, and collect a small changed-regime
+calibration set before attempting transfer again. Do not scale the steerer.
+The timing grid has shown that a state-aware gate may add value over the
+action-only prior within FineWeb 85M, but recovery failures and zero
+changed-regime support keep the deployment gate closed.
 
 ## Reproduction
 

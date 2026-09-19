@@ -19,6 +19,7 @@ controls; none is a contract-valid 10x deployment result.
 | Fixed shadow stop | Exact matched 85M/139M FineWeb-Edu and TinyStories screen, 12 roots | 11/12 durable endpoint passes; 0 failures; 4/4 strata meet 2/3 rule | `1.1319x` geometric wall / `1.1426x` FLOP / `1.1429x` token ratio including prefix; thresholds non-discriminating | Audited fixed baseline/action family only |
 | Action-conditioned atlas ensemble | Phase-switch seeds 13--14 | Support 2/2, final top-1 `0/2`, safe noop both | Final prediction/reality gap `0.0101` | Gate closed |
 | Timing-conditioned shadow gate pilot | FineWeb-Edu 85M, parent steps 768/1280/1792, seeds 21--26 | Complete-seed final holdouts select noop early and shadow late `6/6`; recovery selection regresses on 2/3 fresh seeds | Diagnostic selected wall ratio `1.051x`; final prediction gaps `0.0015--0.0019` | Promising small gate; multi-horizon deployment closed |
+| Changed-regime timing transfer | FineWeb 85M train; FineWeb 139M/TinyStories holdout, 9 groups | Support `0/9`, safe noop `9/9`, raw final top-1 `4/9` | Final prediction/reality gap `0.00431`; oracle mean `-0.01942` | Geometry does not transfer; collect calibration data |
 
 The shadow row is retained as a useful fixed baseline; its exact charged
 ratios and roster are in
@@ -64,6 +65,13 @@ selects a late action with positive recovery loss on two of three fresh seeds.
 The model therefore earns a conservative risk-gate experiment, not a deployed
 driver or a larger steerer. Results are in
 [`SHADOW_TIMING_GRID_RESULTS.md`](SHADOW_TIMING_GRID_RESULTS.md).
+
+The changed-regime transfer check is closed for deployment. Training on the
+nine FineWeb 85M timing roots produced zero supported groups on the held-out
+FineWeb 139M and TinyStories roots, so the safe policy abstained everywhere;
+raw final ranking was only 4/9. This validates the support gate but does not
+validate transfer. A small changed-regime calibration set is required before
+retesting the selector.
 
 Therefore:
 
@@ -113,3 +121,5 @@ been exhausted.
 - `runs/shadow-gate-atlas-v1/manifest.json`
 - `runs/shadow-timing-grid-report-v1.json`
 - `runs/shadow-timing-grid-atlas-v1/manifest.json`
+- `runs/shadow-timing-transfer-atlas-v1/manifest.json`
+- `runs/shadow-timing-transfer-model-v1/report.json`
