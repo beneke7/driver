@@ -175,6 +175,34 @@ block schedule and a disjoint tail interval of the TinyStories training file.
 This changed-data check is not pooled with the FineWeb result; it is evidence
 about allocation transfer only.
 
+### Pre-parent low-rank transport oracle
+
+The next structured-transport ceiling uses only trajectory snapshots available
+before the step-1536 parent. The nested basis roster is fixed as secants:
+
+1. rank 1: `theta_1536 - theta_1408`;
+2. rank 2: `theta_1408 - theta_1280`, `theta_1536 - theta_1408`;
+3. rank 3: `theta_1280 - theta_1152`, `theta_1408 - theta_1280`,
+   `theta_1536 - theta_1408`.
+
+For each rank, a hindsight coefficient fit projects the step-2048 future
+parameter delta into that pre-parent span. The projected state is applied at
+the step-1536 parent with AdamW moments preserved, the data cursor advanced to
+step 2048, and a 128-step recovery plus final step-2304 continuation is
+measured. The projection fit, future target, and skipped exposure are charged
+and marked oracle-only; future optimizer state is not assumed to be available.
+The primary roster is three FineWeb-Edu 85M roots, three FineWeb-Edu 139M
+roots, and three TinyStories 85M roots with complete provenance. Parent-cursor
+and zero-moment/clock-reset controls are separate follow-ups, not silently
+pooled with the primary result.
+
+Report explained future-delta energy, residual, singular values, condition
+number, immediate/recovery/final loss, fixed thresholds, failures, and
+conservative cost. This oracle cannot support a driver claim; it only remains
+open if a low-rank action shows durable improvement on at least two of three
+fresh roots within a regime and a positive conservative threshold-cost
+opportunity.
+
 ## Capability and cost contract
 
 For every held-out case define three thresholds before reading candidate

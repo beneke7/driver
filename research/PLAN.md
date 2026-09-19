@@ -335,6 +335,14 @@ This is evidence for long-horizon action labels and state coupling, not a
 reason to scale a role-wise steerer. See
 [`TRAJECTORY_TRANSPORT_RESULTS.md`](TRAJECTORY_TRANSPORT_RESULTS.md).
 
+The remaining Phase-2 transport check is the pre-parent low-rank oracle. It
+uses nested secant bases of ranks 1/2/3 from steps 1152--1536, fits hindsight
+coefficients to the step-2048 future delta, preserves parent AdamW state, and
+charges the skipped exposure and projection work. It is diagnostic only; a
+weak result closes this basis family before any learned transport model is
+scaled. See the exact roster and accounting in
+[`DECODER_DRIVER_PREREGISTRATION.md`](DECODER_DRIVER_PREREGISTRATION.md).
+
 The next admissible rung is a cheap actionability/data-work oracle using real
 branches and explicit cost, or a causal transport probe that predicts both
 parameter and optimizer-state changes. Do not add planner, dreaming, PPO/SAC,
