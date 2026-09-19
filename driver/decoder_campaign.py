@@ -69,7 +69,18 @@ PULSE_STRATEGIES = (
     "role_pulse_medium",
     "role_pulse_large",
 )
-ALL_STRATEGIES = STRATEGIES + TRAJECTORY_STRATEGIES + SHADOW_STRATEGIES + PULSE_STRATEGIES + ("damping",)
+MOMENTUM_STRATEGIES = (
+    "momentum_extrapolate_small",
+    "momentum_extrapolate_medium",
+)
+ALL_STRATEGIES = (
+    STRATEGIES
+    + TRAJECTORY_STRATEGIES
+    + SHADOW_STRATEGIES
+    + PULSE_STRATEGIES
+    + MOMENTUM_STRATEGIES
+    + ("damping",)
+)
 QUALITY_FACTORS = (0.995, 0.99, 0.98)
 SHADOW_STOP_RECOVERY_STEPS = 384
 SHADOW_STOP_FINAL_STEPS = 512
@@ -102,6 +113,8 @@ class CampaignConfig:
     pulse_medium_mlp: float = 0.50
     pulse_large_attention: float = 2.00
     pulse_large_mlp: float = 0.25
+    momentum_extrapolate_small: float = 0.25
+    momentum_extrapolate_medium: float = 0.50
     open_loop_start: float = 1.10
     open_loop_end: float = 0.95
     trajectory_interval: int = 32
@@ -518,6 +531,8 @@ def _proposals(
         "role_pulse_small": "role_pulse_small",
         "role_pulse_medium": "role_pulse_medium",
         "role_pulse_large": "role_pulse_large",
+        "momentum_extrapolate_small": "noop",
+        "momentum_extrapolate_medium": "noop",
         "damping": "damping",
     }
     shallow_score = (
@@ -884,6 +899,62 @@ def _reset_adam_moments(optimizer: torch.optim.Optimizer) -> int:
     return reset_count
 
 
+@torch.no_grad()
+def _apply_momentum_extrapolation(
+    optimizer: torch.optim.Optimizer | _MuonAdamW,
+    alpha: float,
+) -> dict[str, Any]:
+    """Apply a normalized AdamW-equivalent displacement without a new gradient.
+
+    The optimizer state and data cursor remain unchanged. This is deliberately
+    an equal-token response probe; skipping data or advancing optimizer time is
+    a separate hypothesis and must not be smuggled into this action.
+    """
+    if not math.isfinite(alpha) or alpha <= 0.0:
+        raise ValueError("momentum extrapolation alpha must be finite and positive")
+    if not isinstance(optimizer, torch.optim.AdamW):
+        raise ValueError("momentum extrapolation currently requires AdamW")
+    parameter_count = 0
+    state_steps: set[int] = set()
+    for group in optimizer.param_groups:
+        beta1, beta2 = group["betas"]
+        epsilon = float(group["eps"])
+        learning_rate = float(group["lr"])
+        weight_decay = float(group["weight_decay"])
+        for parameter in group["params"]:
+            state = optimizer.state.get(parameter)
+            if not state or "step" not in state:
+                raise ValueError("AdamW momentum state is not initialized")
+            step_value = int(state["step"].item())
+            if step_value <= 0:
+                raise ValueError("AdamW momentum step must be positive")
+            state_steps.add(step_value)
+            exp_avg = state.get("exp_avg")
+            exp_avg_sq = state.get("exp_avg_sq")
+            if exp_avg is None or exp_avg_sq is None:
+                raise ValueError("AdamW momentum tensors are missing")
+            bias_correction1 = 1.0 - beta1**step_value
+            bias_correction2 = 1.0 - beta2**step_value
+            denominator = exp_avg_sq.sqrt().div_(math.sqrt(bias_correction2)).add_(epsilon)
+            step_size = alpha * learning_rate / bias_correction1
+            parameter.mul_(1.0 - alpha * learning_rate * weight_decay)
+            parameter.addcdiv_(exp_avg, denominator, value=-step_size)
+            parameter_count += parameter.numel()
+    if len(state_steps) != 1:
+        raise ValueError("AdamW momentum steps are inconsistent across parameters")
+    return {
+        "kind": "momentum_extrapolation",
+        "alpha": alpha,
+        "optimizer_state": "preserved",
+        "data_cursor": "preserved",
+        "state_step": next(iter(state_steps)),
+        "parameter_count": parameter_count,
+        # Approximate elementwise sqrt/divide/add cost; this is charged as
+        # maneuver work, not presented as a measured kernel benchmark.
+        "flops": 8.0 * parameter_count,
+    }
+
+
 def _branch_horizons(
     strategy: str, campaign: CampaignConfig
 ) -> tuple[int, int, int]:
@@ -974,6 +1045,19 @@ def _branch(
                 maneuver["optimizer_state"] = "zero_moments"
                 maneuver["reset_moment_values"] = reset_count
                 maneuver["flops"] += 2.0 * reset_count
+            intervention_loss = _evaluate(
+                model,
+                validation_values,
+                target_config=target_config,
+                campaign=campaign,
+                device=device,
+            )
+        if proposal.strategy in MOMENTUM_STRATEGIES:
+            alpha = {
+                "momentum_extrapolate_small": campaign.momentum_extrapolate_small,
+                "momentum_extrapolate_medium": campaign.momentum_extrapolate_medium,
+            }[proposal.strategy]
+            maneuver = _apply_momentum_extrapolation(optimizer, alpha)
             intervention_loss = _evaluate(
                 model,
                 validation_values,
@@ -1154,6 +1238,8 @@ def _branch(
             "trajectory_extrapolate_reset": 7.0,
             "trajectory_shadow_average": 8.0,
             "trajectory_shadow_stop": 13.0,
+            "momentum_extrapolate_small": 14.0,
+            "momentum_extrapolate_medium": 15.0,
         }
         action_parameters = {
             "predicted_gain": proposal.predicted_gain,
@@ -1175,6 +1261,14 @@ def _branch(
             )
         elif selected_schedule == "damping":
             action_parameters["global_lr_multiplier"] = 0.80
+        if proposal.strategy in MOMENTUM_STRATEGIES and maneuver is not None:
+            action_parameters.update(
+                {
+                    "momentum_alpha": maneuver["alpha"],
+                    "optimizer_state": maneuver["optimizer_state"],
+                    "data_cursor": maneuver["data_cursor"],
+                }
+            )
         cost_components = {
             "target_flops": target_flops - recovery_flops - pulse_overhead_flops,
             "driver_inference_flops": driver_inference_flops,
@@ -1729,7 +1823,24 @@ def _aggregate_curves(curves: list[dict[str, Any]]) -> dict[str, Any]:
     return {"per_branch": curves, "aggregate": aggregate}
 
 
+def _self_check() -> None:
+    parameter = torch.nn.Parameter(torch.tensor([1.0, -1.0]))
+    optimizer = torch.optim.AdamW([parameter], lr=0.1, weight_decay=0.0)
+    parameter.grad = torch.tensor([1.0, -1.0])
+    optimizer.step()
+    before = parameter.detach().clone()
+    state_step = int(optimizer.state[parameter]["step"].item())
+    maneuver = _apply_momentum_extrapolation(optimizer, 0.25)
+    assert maneuver["optimizer_state"] == "preserved"
+    assert int(optimizer.state[parameter]["step"].item()) == state_step
+    assert not torch.equal(parameter.detach(), before)
+    print("decoder campaign self-check: momentum extrapolation preserves state")
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
+    if args.self_check:
+        _self_check()
+        return {}
     _require_clean_repo(args.allow_dirty)
     campaign = CampaignConfig(
         width=args.width,
@@ -1755,6 +1866,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         pulse_medium_mlp=args.pulse_medium_mlp,
         pulse_large_attention=args.pulse_large_attention,
         pulse_large_mlp=args.pulse_large_mlp,
+        momentum_extrapolate_small=args.momentum_extrapolate_small,
+        momentum_extrapolate_medium=args.momentum_extrapolate_medium,
         open_loop_start=args.open_loop_start,
         open_loop_end=args.open_loop_end,
         trajectory_interval=args.trajectory_interval,
@@ -1779,6 +1892,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "pulse_medium_mlp",
         "pulse_large_attention",
         "pulse_large_mlp",
+        "momentum_extrapolate_small",
+        "momentum_extrapolate_medium",
     ):
         value = getattr(campaign, name)
         if not math.isfinite(value) or value <= 0.0:
@@ -1957,6 +2072,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--self-check", action="store_true")
     parser.add_argument("--output", default="runs/decoder-development")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--landscape", action="append", choices=LANDSCAPES)
@@ -2004,6 +2120,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--pulse-large-mlp", type=float, default=CampaignConfig.pulse_large_mlp
+    )
+    parser.add_argument(
+        "--momentum-extrapolate-small",
+        type=float,
+        default=CampaignConfig.momentum_extrapolate_small,
+    )
+    parser.add_argument(
+        "--momentum-extrapolate-medium",
+        type=float,
+        default=CampaignConfig.momentum_extrapolate_medium,
     )
     parser.add_argument("--open-loop-start", type=float, default=CampaignConfig.open_loop_start)
     parser.add_argument("--open-loop-end", type=float, default=CampaignConfig.open_loop_end)
