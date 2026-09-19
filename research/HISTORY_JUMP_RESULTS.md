@@ -777,3 +777,10 @@ time and `33.3%` lower branch training FLOPs, with a small endpoint
 improvement. This is one root only and uses a fixed post-hoc merge, so it is a
 screening signal rather than a promoted result. Replication across seeds and
 the 139M target is now more informative than adding a larger steerer.
+
+The exact same-parent 512-step shadow fork was repeated on FineWeb-Edu seeds
+4 and 5. Seed 4 moved from `1.34743` (full no-op) to `1.34243`; seed 5 moved
+from `1.34515` to `1.34124`. Both saved about `28%` of branch wall time and
+`33.3%` of branch training FLOPs. Including the shared prefix, each is about a
+`10%` end-to-end wall reduction. This is now a 3/3 85M FineWeb screen, not yet
+a cross-data or cross-width result.
