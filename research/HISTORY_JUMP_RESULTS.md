@@ -388,3 +388,25 @@ now strong enough to promote the fixed shadow timing rule as a baseline, but
 not as a learned driver: it is still an offline endpoint average with a
 hand-locked stopping time. The next driver step is to learn the timing and
 acceptance gate, with the fixed rule retained as its safety baseline.
+
+### Driver architecture screen and first stop gate
+
+The passive world-model screen now uses 52,448 telemetry examples from the
+completed real runs. On a whole-seed holdout containing FineWeb-Edu seeds 6–8
+(4,128 examples), the compact `history=8, hidden=64` predictor reached RMSE
+`0.08190` and correlation `0.775`. The selected `history=16, hidden=128`
+predictor reached RMSE `0.05173` and correlation `0.915`; the train target is
+the next observed loss change. A single-seed capacity scan also preferred
+history 16 over history 8 and did not show a penalty from width 128. This is
+enough evidence to use a numerical history MLP as the first driver backbone;
+it is not evidence that a recurrent or language-pretrained controller is
+needed.
+
+Using the saved shadow snapshots, 23 candidate stop labels were extracted at
+global steps `1792`, `1920`, `2048`, and `2176` where available. A standardized
+ridge predictor with a leave-one-seed-out split was used as the deliberately
+cheap gate. With a low threshold it attempted an early `2048` stop and failed
+on one fresh seed; with a conservative `0.005` predicted-gain threshold it
+abstained to `2176` on all fresh seeds and did not beat the fixed rule. The
+correct next investment is therefore more matched action states and
+action-conditioned labels, not a deeper policy or imagined rollout yet.
