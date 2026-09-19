@@ -637,3 +637,29 @@ not enough to calibrate the state space. Adding the FineWeb roots gave support
 prior still overestimated the gain (`0.0291` expected versus `0.00655`
 realized), so the result supports action ranking within a regime but not
 cross-regime magnitude prediction.
+
+The same exact-parent `2048` timing test was repeated on TinyStories seeds 4
+and 5. Candidates ended at `0.86053` and `0.86252`, versus full no-op endpoints
+`0.84452` and `0.84602`; both saved `33.25%` of branch FLOPs but failed the
+quality target. Together with seed 3, this rules out the current early timing
+shortcut across three independent roots at 85M.
+
+The saved full-endpoint snapshots were also rescored with shadow windows of
+one, two, and three recent windows:
+
+| Seed | Window 1 | Window 2 | Window 3 |
+| ---: | ---: | ---: | ---: |
+| 3 | `0.85045` | `0.84538` | `0.84861` |
+| 4 | `0.84452` | `0.83785` | `0.84063` |
+| 5 | `0.84599` | `0.83947` | `0.84292` |
+
+Window 2 wins all three roots, so it is a reasonable fixed baseline action;
+the scan does not yet justify a learned window controller.
+
+Finally, a 128-wide history MLP trained to predict next-step loss changes
+within TinyStories used 9,024 examples and achieved RMSE `0.01689` with
+correlation `0.922`, versus constant-baseline RMSE `0.04189`. Training on the
+mixed FineWeb/Tiny archive improved the same TinyStories holdout over baseline
+but only reached RMSE `0.03512` and correlation `0.590`. This supports the
+history-conditioned representation as a useful passive dynamics model while
+identifying regime calibration—not steerer capacity—as the next constraint.
