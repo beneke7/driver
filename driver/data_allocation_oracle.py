@@ -31,10 +31,11 @@ from .decoder_benchmark import (
     make_byte_stream,
 )
 from .decoder_campaign import (
+    _autocast,
     _evaluate,
     _model_and_optimizer,
+    _set_group_lrs,
     _sync,
-    _train_step,
 )
 from .trajectory_transport_oracle import (
     _campaign_and_config,
@@ -84,6 +85,27 @@ def _data_sha(train_values: torch.Tensor, validation_values: torch.Tensor) -> st
     )
 
 
+def _fast_noop_step(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    stream: TokenStream,
+    target: Any,
+    campaign: Any,
+    device: torch.device,
+) -> int:
+    """Run the noop step without telemetry that this oracle does not use."""
+    _set_group_lrs(optimizer, campaign)
+    tokens, targets = stream.batch(
+        batch_size=target.batch_size, context=target.context, device=device
+    )
+    optimizer.zero_grad(set_to_none=True)
+    with _autocast(campaign, device):
+        loss = model(tokens, targets)
+    loss.backward()
+    optimizer.step()
+    return target.batch_size * target.context
+
+
 def _train_branch(
     *,
     parent: Path,
@@ -115,16 +137,13 @@ def _train_branch(
         phase_metrics: list[dict[str, Any]] = []
         consumed_tokens = 0
         for step in range(HORIZONS[-1]):
-            _, consumed = _train_step(
+            consumed = _fast_noop_step(
                 model,
                 optimizer,
                 stream,
                 target,
                 campaign,
                 device,
-                step=step,
-                schedule="noop",
-                runtime={},
             )
             consumed_tokens += consumed
             if step + 1 in HORIZONS:
