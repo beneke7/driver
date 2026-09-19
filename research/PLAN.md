@@ -283,6 +283,18 @@ policy did not beat the action-only prior. Parent timing must therefore be
 varied before training a cost-aware selector. Keep no-op fallback and do not
 add a larger steerer, planner, dreaming, or RL rung yet.
 
+The preregistered timing grid now supplies the first clean state signal. On
+FineWeb-Edu 85M, the same shadow action loses 3/3 at parent step 768
+(mean final `+0.05017`), wins 3/3 at step 1280, and wins 3/3 at step 1792.
+The smallest existing response model, trained with complete-seed holdouts,
+selected noop early and shadow late on all six held-out final-horizon groups
+(`6/6` raw top-1; selected mean deltas `-0.00655`, `-0.00473`, and `-0.00497`
+for seeds 24--26 versus an action-only prior of `0`). It still selected a
+harmful late action at recovery on two seeds, so the multi-horizon deployment
+gate is closed. This is evidence for a conservative timing-aware gate, not a
+reason to scale the steerer. See
+[`SHADOW_TIMING_GRID_RESULTS.md`](SHADOW_TIMING_GRID_RESULTS.md).
+
 ## Direction amendment (2026-09-19): learned trajectory transport
 
 The fixed pulse route is now closed as a promotion path. The next research

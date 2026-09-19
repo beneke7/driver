@@ -281,6 +281,10 @@ def report(results: list[Path]) -> dict[str, Any]:
     for row in cases:
         data_name = "FineWeb-Edu" if "FineWeb" in row["train_file"] else "TinyStories"
         groups.setdefault(f"{data_name}-{row['width']}", []).append(row)
+        groups.setdefault(f"parent-step-{row['parent_step']}", []).append(row)
+        groups.setdefault(
+            f"{data_name}-{row['width']}-parent-step-{row['parent_step']}", []
+        ).append(row)
     return {
         "schema": "landscape-driver.shadow-gate-report.v1",
         "mechanism_screen": True,

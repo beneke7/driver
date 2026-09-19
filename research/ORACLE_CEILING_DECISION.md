@@ -18,6 +18,7 @@ controls; none is a contract-valid 10x deployment result.
 | Same-corpus 25% block mixture | FineWeb 85M/139M, 6 roots | 6/6 durable equal-budget wins; final mean delta `-0.01252` | Exact `1.00x` FLOPs and approximately `1.00x` wall; TinyStories transfer 0/3 final wins | Fixed FineWeb control only; close as general driver route |
 | Fixed shadow stop | Exact matched 85M/139M FineWeb-Edu and TinyStories screen, 12 roots | 11/12 durable endpoint passes; 0 failures; 4/4 strata meet 2/3 rule | `1.1319x` geometric wall / `1.1426x` FLOP / `1.1429x` token ratio including prefix; thresholds non-discriminating | Audited fixed baseline/action family only |
 | Action-conditioned atlas ensemble | Phase-switch seeds 13--14 | Support 2/2, final top-1 `0/2`, safe noop both | Final prediction/reality gap `0.0101` | Gate closed |
+| Timing-conditioned shadow gate pilot | FineWeb-Edu 85M, parent steps 768/1280/1792, seeds 21--26 | Complete-seed final holdouts select noop early and shadow late `6/6`; recovery selection regresses on 2/3 fresh seeds | Diagnostic selected wall ratio `1.051x`; final prediction gaps `0.0015--0.0019` | Promising small gate; multi-horizon deployment closed |
 
 The shadow row is retained as a useful fixed baseline; its exact charged
 ratios and roster are in
@@ -55,6 +56,14 @@ free early stopping. The existing three parent-relative thresholds all reach
 at the first immediate point for both branches, so no threshold-cost claim is
 made. The full accounting and paired hashes are in
 [`SHADOW_GATE_RESULTS.md`](SHADOW_GATE_RESULTS.md).
+
+Adding parent timing creates the first useful state-dependent separation: the
+same action loses at 768 steps and wins at 1280 and 1792. A small response
+model reproduces that final-horizon ranking on complete-seed holdouts, but it
+selects a late action with positive recovery loss on two of three fresh seeds.
+The model therefore earns a conservative risk-gate experiment, not a deployed
+driver or a larger steerer. Results are in
+[`SHADOW_TIMING_GRID_RESULTS.md`](SHADOW_TIMING_GRID_RESULTS.md).
 
 Therefore:
 
@@ -102,3 +111,5 @@ been exhausted.
 - `runs/trajectory-low-rank-oracle-tinystories85-r3-v1/manifest.json`
 - `runs/shadow-gate-report-v1.json`
 - `runs/shadow-gate-atlas-v1/manifest.json`
+- `runs/shadow-timing-grid-report-v1.json`
+- `runs/shadow-timing-grid-atlas-v1/manifest.json`
