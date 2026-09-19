@@ -52,7 +52,7 @@ changed width before a data-skipping action is considered.
 uv run python -m driver.decoder_campaign --self-check
 
 CUDA_LAUNCH_BLOCKING=1 uv run python -m driver.decoder_campaign \
-  --output runs/momentum-extrapolation-fineweb85-s27-29-v1 \
+  --output runs/momentum-extrapolation-fineweb85-s27-29-v2 \
   --landscape phase_switch --seed 27 --seed 28 --seed 29 \
   --strategy noop \
   --strategy momentum_extrapolate_small \
@@ -64,7 +64,7 @@ CUDA_LAUNCH_BLOCKING=1 uv run python -m driver.decoder_campaign \
   --validation-file data/raw/FineWeb-Edu-valid-8m.txt --device cuda
 
 CUDA_LAUNCH_BLOCKING=1 uv run python -m driver.decoder_campaign \
-  --output runs/momentum-extrapolation-tinystories85-s12-14-v1 \
+  --output runs/momentum-extrapolation-tinystories85-s12-14-v2 \
   --landscape phase_switch --seed 12 --seed 13 --seed 14 \
   --strategy noop \
   --strategy momentum_extrapolate_small \

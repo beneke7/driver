@@ -1262,13 +1262,7 @@ def _branch(
         elif selected_schedule == "damping":
             action_parameters["global_lr_multiplier"] = 0.80
         if proposal.strategy in MOMENTUM_STRATEGIES and maneuver is not None:
-            action_parameters.update(
-                {
-                    "momentum_alpha": maneuver["alpha"],
-                    "optimizer_state": maneuver["optimizer_state"],
-                    "data_cursor": maneuver["data_cursor"],
-                }
-            )
+            action_parameters["momentum_alpha"] = maneuver["alpha"]
         cost_components = {
             "target_flops": target_flops - recovery_flops - pulse_overhead_flops,
             "driver_inference_flops": driver_inference_flops,
