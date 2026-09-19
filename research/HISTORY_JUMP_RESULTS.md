@@ -389,6 +389,12 @@ not as a learned driver: it is still an offline endpoint average with a
 hand-locked stopping time. The next driver step is to learn the timing and
 acceptance gate, with the fixed rule retained as its safety baseline.
 
+Charging the shared prefix in wall time makes the practical saving smaller:
+seed 3's 2048 case saves `9.75%` end to end, while the 2176 rule saves
+`4.55%`, `4.50%`, `4.18%`, `4.00%`, and `4.08%` on seeds 4–8 (mean
+`4.26%`). The branch-level compute reduction is therefore a mechanism signal,
+not a claim of a 16.60% whole-training speedup.
+
 ### Driver architecture screen and first stop gate
 
 The passive world-model screen now uses 52,448 telemetry examples from the
@@ -479,7 +485,8 @@ remains `11.08%` after charging the shared prefix and the candidate is still a
 fixed shadow rule rather than a learned driver. A third exact 139M seed 4
 also passed: early `1.50529` versus no-op `1.50885`, with `68.79s` versus
 `96.59s`. The fixed 2048 timing mechanism has now replicated across three
-139M seeds.
+139M seeds. Charging each shared prefix in wall time gives end-to-end savings
+of `9.81%`, `9.58%`, and `9.78%` (mean `9.72%`) on seeds 2–4.
 
 ### History-enabled action states
 
