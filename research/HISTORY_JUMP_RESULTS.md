@@ -410,3 +410,28 @@ on one fresh seed; with a conservative `0.005` predicted-gain threshold it
 abstained to `2176` on all fresh seeds and did not beat the fixed rule. The
 correct next investment is therefore more matched action states and
 action-conditioned labels, not a deeper policy or imagined rollout yet.
+
+### Action archive expansion
+
+Two more fresh 85M FineWeb-Edu action sets at the original parent step 1536
+again separated live maneuvers from endpoint rectification:
+
+| Seed | No-op | Live average | Live extrapolate | Shadow raw | Shadow merged |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 9 | `1.47553` | `1.48238` | `1.47828` | `1.47553` | `1.44142` |
+| 10 | `1.47445` | `1.48167` | `1.47585` | `1.47479` | `1.44142` |
+
+All six branches succeeded. Relative to each no-op, the live average lost by
+`0.00686` and `0.00722`, live extrapolation lost by `0.00276` and `0.00140`,
+and shadow averaging gained `0.03411` and `0.03303`. A ridge action head using
+the parent telemetry and action identity selected shadow on every leave-one-
+seed-out split across seeds 3, 4, 5, 9, and 10, including held-out seed 10.
+That is a useful safety baseline, but action identity alone can explain the
+ranking; it is not yet evidence of state-dependent steering.
+
+To force state variation, seed 11 used a later parent at global step 1792 and
+a 512-step continuation to 2304. No-op ended at `1.47774`, live average at
+`1.48241`, live extrapolation at `1.47950`, and shadow at `1.44375` from raw
+`1.47745`. The same qualitative split held, so the shadow mechanism survives
+a changed decision time. The next selector test should include this later
+parent and report whether telemetry improves over the action-only prior.
