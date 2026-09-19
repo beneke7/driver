@@ -367,6 +367,15 @@ budget fixed. Test three fresh 85M and three fresh 139M roots; do not train a
 selector unless at least two of three roots at both widths improve durably and
 threshold cost materially beats the fixed shadow control.
 
+The FineWeb mixture clears the equal-budget durability screen strongly: 6/6
+roots improve at immediate, recovery, and final horizons, with mean final
+delta `-0.01252`. It does not reduce cost (exactly `1.00x` FLOPs and about
+`1.00x` wall), and the preregistered TinyStories transfer check regresses at
+the final horizon on 3/3 roots after transient early gains. Keep it as a
+FineWeb control, but close it as a transferable data-driver route; no selector
+or larger steerer is justified by this evidence. See
+[`DATA_MIXTURE_RESULTS.md`](DATA_MIXTURE_RESULTS.md).
+
 ### Complete-state transport sanity control (2026-09-19)
 
 The state-consistency gap in the earlier future-weight oracle is now measured.
