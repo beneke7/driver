@@ -321,3 +321,20 @@ contains little future attention/MLP direction. The single-basis transport
 policy is closed. A richer basis must earn a new probe, otherwise move the
 next oracle screen to data/work allocation rather than increasing steerer
 capacity.
+
+### Passive trajectory corpus and phase model (2026-09-19)
+
+The first normalized passive corpus now contains 17 complete local AdamW roots
+and 13,056 rows with step/token position, role-wise optimizer telemetry,
+protocol phase, and future training-loss targets at horizons 1/8/32/128. The
+collector preserves source manifest, transition, data, configuration, and
+parent-checkpoint hashes; it explicitly marks the data as passive no-op
+evidence. See [PASSIVE_TRAJECTORY_RESULTS.md](PASSIVE_TRAJECTORY_RESULTS.md).
+
+A small root-held-out MLP improves future-loss prediction within FineWeb 85M
+(`h128` RMSE `0.100` versus constant `0.150`) and mostly within TinyStories
+(`0.070` versus `0.084`), but loses to the constant baseline on a mixed
+width/data holdout at every horizon. Phase accuracy is largely a schedule
+label and is not a dynamics claim. The result supports compact numerical
+history features while closing the shortcut of scaling the steerer before
+regime support and action-conditioned targets are available.
