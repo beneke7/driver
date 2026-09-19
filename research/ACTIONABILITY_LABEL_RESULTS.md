@@ -48,6 +48,21 @@ one data regime, hold out complete roots, and require the action-conditioned
 model to beat the action-only prior at the final horizon. No planner, RL, or
 online adaptation is justified by this corpus.
 
+As a direct model gate, the existing numerical ensemble was retrained on
+phase-switch seeds 9--12 and evaluated on complete roots 13--14. Both held-out
+roots were inside the calibrated support radius, but final raw action top-1
+agreement was `0/2`; the safe policy selected noop on both, with final
+prediction/reality gap `0.0101`. This is a useful safe abstention, not a
+successful selector. Reproduction:
+
+```bash
+uv run python -m driver.response_atlas_model \
+  --atlas runs/response-atlas-phase-switch-long-v2/atlas.jsonl \
+  --holdout-root 'phase_switch-13:5e5a6a3822f34e458d9dd909a8bc118a425742f9ff8649dd22849fd95fe6cfa6:fa4d8223f432b92f9587d79131446318cbdca44ffdabd32f6a712644a85a5185' \
+  --holdout-root 'phase_switch-14:a626f127f872950cbfd50ba6bc3be2820ecb094cb6e588cbf15fc1129a83a183:8631083a79db0c6e29877c06b5aea445d47892e896245679991665fd7103941d' \
+  --output runs/actionability-model-phase-switch-long-v1 --device cpu
+```
+
 The generated label manifests retain the input atlas checksums:
 
 - `runs/actionability-adamw-expanded-v2/manifest.json`
