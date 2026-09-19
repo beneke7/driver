@@ -249,7 +249,6 @@ def _record(
     manifest: Mapping[str, Any],
     noop: Mapping[str, Any] | None,
     group_id: str,
-    source_result: str,
 ) -> dict[str, Any]:
     before = _mapping(row["before"], "transition.before")
     metadata = _mapping(row.get("metadata", {}), "transition.metadata")
@@ -264,7 +263,13 @@ def _record(
     ]
     raw_config = manifest.get("config", {})
     config = raw_config if isinstance(raw_config, Mapping) else {}
-    root_id = f"{Path(source_result).name}:{case_id}"
+    root_id = ":".join(
+        (
+            case_id,
+            str(case.get("data_sha256", "")),
+            str(case.get("config_sha256", "")),
+        )
+    )
     prefix_wall = _finite(
         _mapping(before.get("features", {}), "transition.before.features").get(
             "prefix_seconds", 0.0
@@ -354,7 +359,7 @@ def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list
         raise ValueError("at least one campaign result directory is required")
     groups: dict[
         tuple[str, str, int, int],
-        list[tuple[dict[str, Any], Mapping[str, Any], Mapping[str, Any], str]],
+        list[tuple[dict[str, Any], Mapping[str, Any], Mapping[str, Any]]],
     ] = defaultdict(list)
     input_manifests: list[dict[str, Any]] = []
     for result in results:
@@ -369,7 +374,7 @@ def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list
             case = cases.get(case_id)
             if case is None:
                 raise ValueError(f"transition {row.get('transition_id')} has unknown case {case_id}")
-            groups[_group_key(row, case)].append((row, case, manifest, str(result)))
+            groups[_group_key(row, case)].append((row, case, manifest))
         input_manifests.append(
             {
                 "path": str(manifest_path),
@@ -385,7 +390,7 @@ def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list
     duplicate_actions = 0
     for key, entries in sorted(groups.items()):
         actions: dict[
-            str, tuple[dict[str, Any], Mapping[str, Any], Mapping[str, Any], str]
+            str, tuple[dict[str, Any], Mapping[str, Any], Mapping[str, Any]]
         ] = {}
         for entry in entries:
             kind = str(_mapping(entry[0].get("action"), "transition.action").get("kind", ""))
@@ -398,7 +403,7 @@ def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list
             unmatched += sum(kind != "noop" for kind in actions)
         group_id = ":".join((key[0], key[1], str(key[2]), str(key[3])))
         for entry in entries:
-            row, case, manifest, source_result = entry
+            row, case, manifest = entry
             if require_matched and str(
                 _mapping(row.get("action"), "transition.action").get("kind", "")
             ) != "noop" and noop is None:
@@ -410,7 +415,6 @@ def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list
                     manifest=manifest,
                     noop=None if noop is None else noop[0],
                     group_id=group_id,
-                    source_result=source_result,
                 )
             )
     summary = {
