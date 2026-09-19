@@ -750,3 +750,30 @@ action still improves its endpoint while replacing 768 branch steps with 512.
 The two Muon rows are single-seed screens and need replication, but the driver
 claim now has the correct baseline direction: it is not merely exploiting
 under-tuned AdamW.
+
+### Checked-in Muon campaign control
+
+The native Muon hybrid is now exposed by `decoder_campaign.py` and passed the
+CPU smoke checks, checkpoint restore, and a clean 85M CUDA campaign. A matched
+three-way ablation makes the earlier interpretation more precise:
+
+| Branch | Raw endpoint | Reported endpoint |
+| --- | ---: | ---: |
+| Muon no-op | `1.34279` | `1.34279` |
+| Muon shadow average | `1.34276` | `1.31409` |
+| Muon pulse plus shadow | `1.34272` | `1.31406` |
+
+The two shadow branches used the same four final model snapshots. The pulse
+therefore contributes effectively nothing at this horizon; the apparent Muon
+quality gain is trajectory averaging. That is a useful primitive, but it is
+not a learned driver and it does not save compute when run to the same
+endpoint.
+
+An exact same-parent branch check then compared the full 768-step no-op with a
+512-step shadow branch. The no-op ended at `1.34282` in `69.75s` of branch
+time; the shortened branch ended at `1.34009` in `48.51s`. After charging the
+shared 1536-step prefix, this is approximately `10%` lower end-to-end wall
+time and `33.3%` lower branch training FLOPs, with a small endpoint
+improvement. This is one root only and uses a fixed post-hoc merge, so it is a
+screening signal rather than a promoted result. Replication across seeds and
+the 139M target is now more informative than adding a larger steerer.
