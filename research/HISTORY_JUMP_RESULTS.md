@@ -491,6 +491,9 @@ fresh 85M action sets supplied the first usable history-conditioned examples:
 | 12 | `1.47867` | `1.48265` | `1.48028` | `1.44484` |
 | 13 | `1.47553` | `1.48010` | `1.47444` | `1.44160` |
 | 14 | `1.47515` | `1.48033` | `1.47783` | `1.43923` |
+| 15 | `1.47614` | `1.48224` | `1.47804` | `1.44112` |
+| 16 | `1.47779` | `1.48477` | `1.48187` | `1.44207` |
+| 17, parent 1792 | `1.48632` | `1.49098` | `1.48603` | `1.45171` |
 
 All branches succeeded and stored 16 parent rows. Shadow gains were
 `0.03383`, `0.03393`, and `0.03592`. Live extrapolation was mixed: it lost by
@@ -499,6 +502,14 @@ A leave-one-seed-out ridge head over the history plus action identity still
 selected shadow on all three splits, and its RMSE was no better than the
 action-only prior. The history path is now ready for a larger archive, but it
 has not earned online adaptation or a deeper policy yet.
+
+Seeds 15 and 16 restored the usual split, with shadow gains `0.03502` and
+`0.03572`. The later-parent seed 17 again made extrapolation slightly useful
+(`0.00029` gain) while shadow gained `0.03461`. A selector trained on seeds
+12–16 and tested on that later-parent state had RMSE `126.5` and support rate
+zero, so it abstained. This stress-tests the support contract: the model must
+not extrapolate from 1536-parent histories to a 1792-parent decision until
+that regime is represented in training.
 
 The first reusable implementation is
 [`driver/trajectory_action_selector.py`](../driver/trajectory_action_selector.py).
