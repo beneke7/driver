@@ -267,13 +267,14 @@ def _run_variant(
         if transport_roles is None:
             model.load_state_dict(future_state)
         else:
-            for name, parameter in model.named_parameters():
-                if _role(name) in transport_roles:
-                    parameter.copy_(
-                        future_state[name].to(
-                            device=parameter.device, dtype=parameter.dtype
+            with torch.no_grad():
+                for name, parameter in model.named_parameters():
+                    if _role(name) in transport_roles:
+                        parameter.copy_(
+                            future_state[name].to(
+                                device=parameter.device, dtype=parameter.dtype
+                            )
                         )
-                    )
         del future_state
         if optimizer_state_policy == "zero_moments":
             reset_count = _reset_adam_moments(optimizer)
