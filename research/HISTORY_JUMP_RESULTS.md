@@ -656,6 +656,11 @@ aggressive actions in the interface, but it is not a promoted optimizer. A
 driver must gate it from state and include recovery risk; increasing the pulse
 strength is not the missing breakthrough.
 
+Uniform `3.0/3.0` was also tested in the combined `2048` protocol on FineWeb
+seed 3. It ended at `2.59382` versus no-op `1.48249`, after an immediate loss
+of `2.78658`. The useful amplitude window is therefore narrow: `2.0/2.0` can
+survive recovery, while `3.0/3.0` does not.
+
 The same `2.0/0.25` pulse on FineWeb-Edu 85M gave final deltas of `-0.00016`,
 `+0.00161`, and `+0.00179` on seeds 3, 4, and 5. Its mean degradation was
 about `+0.00108`, despite all branches recovering from their immediate loss
