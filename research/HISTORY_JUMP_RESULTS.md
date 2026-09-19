@@ -317,3 +317,23 @@ the matched no-op. The no-op finished at `1.53032`; the nowcast finished at
 the earlier prefix and post-hoc extrapolation scans, this keeps secant
 nowcasting as a negative control until a learned predictor beats it on a
 held-out continuation.
+
+### First paired action set for a future gate
+
+A fresh 85M FineWeb-Edu seed-3 run collected four actions from one late parent
+at global step `1536`, with a 768-step continuation: noop, live trajectory
+average, live secant extrapolation (`alpha=0.25`), and endpoint-only shadow
+average. All branches completed. Final losses were `1.48249`, `1.48931`,
+`1.48696`, and `1.44416`, respectively; the shadow branch's raw endpoint was
+`1.48203`. Live displacements were harmful after recovery, while the endpoint
+merge improved the final score by `0.03834` without changing the live AdamW
+trajectory. This is the cleanest current causal separation between a
+trajectory maneuver and an endpoint rectifier.
+
+An offline action-conditioned MLP built from the existing real branches has
+only 20 candidate examples. It selected the shadow action on the fresh
+FineWeb all-action holdout, but selected the wrong live action on a held-out
+TinyStories trajectory group and produced badly calibrated absolute scores.
+The gate is therefore not promoted. Collect more matched parent states and
+calibrate a conservative action head before integrating it with the history
+world model.
