@@ -59,7 +59,7 @@ TRAJECTORY_STRATEGIES = (
     "trajectory_average_reset",
     "trajectory_extrapolate_reset",
 )
-SHADOW_STRATEGIES = ("trajectory_shadow_average",)
+SHADOW_STRATEGIES = ("trajectory_shadow_average", "trajectory_shadow_pulse")
 ALL_STRATEGIES = STRATEGIES + TRAJECTORY_STRATEGIES + SHADOW_STRATEGIES
 QUALITY_FACTORS = (0.995, 0.99, 0.98)
 
@@ -401,6 +401,7 @@ def _proposals(
         "trajectory_average_reset": "trajectory_average_reset",
         "trajectory_extrapolate_reset": "trajectory_extrapolate_reset",
         "trajectory_shadow_average": "noop",
+        "trajectory_shadow_pulse": "role_pulse",
     }
     shallow_score = (
         -parent_features["loss_slope"]
