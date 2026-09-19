@@ -306,3 +306,14 @@ evidence that short history contains predictive information beyond the current
 telemetry snapshot, and the first reason to test a small recurrent or
 history-attention driver. It remains a passive prediction result, not a
 steering or speedup result.
+
+### Late nowcast control
+
+A 139M FineWeb-Edu seed-0 branch applied a two-window secant nowcast with
+`alpha=0.25` at global step `1536`, then continued for the same 768 steps as
+the matched no-op. The no-op finished at `1.53032`; the nowcast finished at
+`1.53726`, with immediate/recovery losses `1.71318/1.59894` versus
+`1.70768/1.58575` and normalized displacement energy `0.293`. Together with
+the earlier prefix and post-hoc extrapolation scans, this keeps secant
+nowcasting as a negative control until a learned predictor beats it on a
+held-out continuation.
