@@ -617,3 +617,23 @@ unstable quickly. It does not reject a learned nowcaster, but that model must
 be trained against future state or decision-relevant outcomes and calibrated
 before it is allowed to bypass real training. The existing live extrapolation
 action remains a low-cost negative control, not a claimed speedup.
+
+### Within-TinyStories replication
+
+Two additional 85M TinyStories roots kept the same parent and horizon:
+
+| Seed | No-op | Live average | Live extrapolate | Shadow merged |
+| ---: | ---: | ---: | ---: | ---: |
+| 3 | `0.85061` | `0.85546` | `0.85196` | `0.84538` |
+| 4 | `0.84452` | `0.84715` | `0.84521` | `0.83785` |
+| 5 | `0.84602` | `0.84939` | `0.84659` | `0.83947` |
+
+Shadow gains were `0.00523`, `0.00667`, and `0.00655`; live averaging lost on
+all three seeds, and live extrapolation lost on seeds 4 and 5. A selector
+trained only on TinyStories seeds 3–4 predicted shadow on seed 5 with RMSE
+`0.00064`, but its leave-one-root support gate abstained because two roots are
+not enough to calibrate the state space. Adding the FineWeb roots gave support
+`1.0`, RMSE `0.00049`, and the same correct shadow choice. Its mixed-archive
+prior still overestimated the gain (`0.0291` expected versus `0.00655`
+realized), so the result supports action ranking within a regime but not
+cross-regime magnitude prediction.
