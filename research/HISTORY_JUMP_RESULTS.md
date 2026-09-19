@@ -476,4 +476,7 @@ versus `1.51308` for its full no-op, with `69.33s` versus `96.61s` of
 marginal branch wall time and zero failures. The 139M 2048 timing result has
 therefore replicated across two seeds, although the end-to-end compute saving
 remains `11.08%` after charging the shared prefix and the candidate is still a
-fixed shadow rule rather than a learned driver.
+fixed shadow rule rather than a learned driver. A third exact 139M seed 4
+also passed: early `1.50529` versus no-op `1.50885`, with `68.79s` versus
+`96.59s`. The fixed 2048 timing mechanism has now replicated across three
+139M seeds.
