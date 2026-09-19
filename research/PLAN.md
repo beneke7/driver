@@ -288,3 +288,27 @@ Do not add more pulse variants, a large pretrained meta-brain, MPC, dreaming,
 or online RL before a transport or productive-region baseline beats noop and
 the action-only prior on fresh complete roots.
 
+### Hindsight trajectory transport oracle (2026-09-19)
+
+The first oracle-ceiling rung is complete. A standalone harness loads exact
+AdamW parent checkpoints at step 1536, applies recorded future parameters from
+step 2048, and measures a 128-step recovery plus a step-2304 endpoint. It
+validates source data/configuration hashes and records both actual and
+conservative cost; the latter charges the declared 512-step skipped exposure.
+See [TRAJECTORY_TRANSPORT_RESULTS.md](TRAJECTORY_TRANSPORT_RESULTS.md).
+
+The surviving variant (`cursor=skip`, parent AdamW moments preserved) passed
+7/9 roots across 85M and 139M FineWeb-Edu plus 85M TinyStories. Its median
+final delta was `-0.00314`, with approximately `1.22x` wall and `1.29x`
+compute-only speedup. Conservative charging of the skipped exposure reduced
+the ratio to `1.00x`. Replaying the parent cursor failed 3/3 85M FineWeb
+roots; zeroing moments failed catastrophically on all three. Parameter and
+data state are therefore coupled, and future optimizer-state handling is an
+unresolved part of transport.
+
+This closes direct hindsight full-weight teleportation as a 10x mechanism. It
+does not close learned structured transport, but the next model must predict
+role-wise parameter and optimizer-state deltas from short calibration history
+and must be evaluated on real branches. No planner, RL, or larger steerer is
+justified until that model beats noop and the action-only baseline under the
+same cost ledger.
