@@ -638,6 +638,24 @@ prior still overestimated the gain (`0.0291` expected versus `0.00655`
 realized), so the result supports action ranking within a regime but not
 cross-regime magnitude prediction.
 
+### High-energy role-pulse screen
+
+To test an explicitly more aggressive maneuver, the 85M TinyStories parent
+used attention/MLP learning-rate multipliers of `1.5/0.5`, `2.0/0.25`, and
+`4.0/0.125` for the first 64 branch steps, followed by ordinary AdamW
+recovery. On seed 3, the final losses were `0.84985`, `0.84948`, and `1.85084`
+against no-op `0.85061`. The strongest pulse therefore crossed a sharp
+stability boundary.
+
+The safer `2.0/0.25` pulse replicated at `0.84408` versus no-op `0.84452` on
+seed 4, but lost at `0.84753` versus `0.84602` on seed 5. Its immediate losses
+were worse on every seed, although recovery returned to the normal trajectory.
+Across seeds 3–5 its mean endpoint delta versus no-op is effectively zero.
+This is a useful catapult-style action family and a clean reason to keep
+aggressive actions in the interface, but it is not a promoted optimizer. A
+driver must gate it from state and include recovery risk; increasing the pulse
+strength is not the missing breakthrough.
+
 The same exact-parent `2048` timing test was repeated on TinyStories seeds 4
 and 5. Candidates ended at `0.86053` and `0.86252`, versus full no-op endpoints
 `0.84452` and `0.84602`; both saved `33.25%` of branch FLOPs but failed the
