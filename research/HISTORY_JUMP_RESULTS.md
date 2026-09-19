@@ -689,3 +689,32 @@ mixed FineWeb/Tiny archive improved the same TinyStories holdout over baseline
 but only reached RMSE `0.03512` and correlation `0.590`. This supports the
 history-conditioned representation as a useful passive dynamics model while
 identifying regime calibration—not steerer capacity—as the next constraint.
+
+### Pulse plus shadow: first early cost-to-quality signal
+
+The useful combination is a uniform `2.0/2.0` learning-rate pulse for the
+first 64 steps, followed by ordinary recovery and a two-window shadow merge at
+global step `2048`. Relative to the complete no-op endpoint at `2304`, the
+candidate deltas were:
+
+| Target/data | Seeds tested | Candidate delta vs no-op | Same-quality passes |
+| --- | ---: | ---: | ---: |
+| 85M FineWeb-Edu | 3, 4, 5, 6, 9, 10 | `-0.00290`, `+0.00041`, `-0.00069`, `-0.00435`, `-0.00016`, `-0.00062` | 5/6 |
+| 139M FineWeb-Edu | 3, 4, 5, 6 | `-0.00344`, `-0.00679`, `-0.00526`, `+0.00235` | 3/4 |
+| 85M TinyStories | 3 | `+0.01878` | 0/1 |
+
+The FineWeb candidates replace 768 branch steps with 512, saving `33.25%` of
+branch training FLOPs and roughly `11%` of total training compute after the
+shared 1536-step prefix is charged. The full FineWeb sample therefore has 8/10
+strict same-quality passes across two widths. Immediate losses are worse in
+every tested pulse branch; recovery and shadow merging create the endpoint
+gain. TinyStories fails badly at the same timing, so this is not a universal
+shortcut and must be data-regime gated.
+
+This is the first meaningful speed signal from the aggressive-driver route,
+but it is not yet a promoted result: the 139M seed-6 miss is `+0.00235`, the
+85M seed-4 miss is `+0.00041`, and no independent policy selected the timing.
+The next implementation should expose `pulse strength`, `shadow window`, and
+`stop horizon` as separate actions, train a conservative gate on complete-root
+holdouts, and fall back to the safe `2176` shadow endpoint whenever the
+2048 prediction is unsupported or uncertain.
