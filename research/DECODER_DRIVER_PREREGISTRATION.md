@@ -111,6 +111,34 @@ required horizon is missing and never creates a counterfactual outcome.
 Labels are development artifacts until an action-conditioned model beats the
 action-only prior on complete held-out roots with support calibration.
 
+### Trajectory-anchor initialization track
+
+Knowledge transfer is evaluated separately from fixed-architecture optimizer
+control. A trajectory-anchor action initializes a fresh target run from a
+complete step-1536 checkpoint produced on a different seed in the same data
+and architecture regime, then consumes the target stream from cursor zero.
+The source checkpoint's model, AdamW state, RNG, and provenance are retained;
+the target data cursor and target data hash are explicit. Source and target
+seeds are paired before reading target outcomes.
+
+The target baseline is the recorded fresh-seed AdamW/no-op endpoint. The
+anchor is evaluated after 128, 512, and 768 target steps against the baseline
+final validation loss. Report the first horizon that reaches and stays at the
+baseline threshold, source-prefix creation cost, target continuation cost,
+checkpoint I/O, and ratios for fixed deployment counts `N = 1, 2, 4, 8, 16`:
+
+```text
+C_anchor(N) = C_source_prefix / N + C_target_continuation
+S_anchor(N) = C_target_noop / C_anchor(N)
+```
+
+The source-prefix cost is never treated as free. A fixed cyclic seed pairing,
+normal continuation, source optimizer-state preservation, and a zero-moment
+state control are development controls. This track cannot claim optimization
+speedup for a single deployment; any positive result is a knowledge-transfer
+result and must survive fresh target seeds, a changed data regime, and the
+same amortization accounting.
+
 ## Capability and cost contract
 
 For every held-out case define three thresholds before reading candidate
