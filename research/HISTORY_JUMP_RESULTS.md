@@ -352,3 +352,30 @@ from raw `1.48182`. The shadow improvement was `0.03031`; both live actions
 again lost after recovery. Three independent late all-action states now show
 the same qualitative ranking, giving the next selector test a real safety
 negative set instead of only endpoint-positive examples.
+
+### Exact-parent early stopping
+
+The saved late action states showed that the window-2 shadow average crossed
+the matched no-op endpoint before the full 768-step continuation: seed 3 first
+crossed at global step `2048`, while seeds 4 and 5 first crossed at `2176`.
+To remove the small GPU-nondeterminism confound from regenerating a prefix, the
+candidate branches were then run directly from the exact parent checkpoint
+used by each original full continuation. The fixed candidates completed with
+zero failures:
+
+| Seed | Candidate endpoint | Matched full no-op | Improvement | Candidate branch wall | Full branch wall | Marginal compute reduction |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 3, stop 2048 | `1.47869` | `1.48249` | `0.00380` | `47.43s` | `66.85s` | `33.25%` |
+| 4, stop 2176 | `1.46011` | `1.47555` | `0.01543` | `57.84s` | `66.90s` | `16.60%` |
+| 5, stop 2176 | `1.46427` | `1.47813` | `0.01387` | `58.10s` | `67.12s` | `16.60%` |
+
+This is the first exact-parent cost-to-target result: a shadow endpoint can
+reach the matched full-run quality with less continuation work, rather than
+only improving the endpoint at fixed work. The reported compute reduction is
+for the branch after the shared 1536-step parent. If the common prefix is also
+charged from initialization, the corresponding end-to-end reductions are only
+`11.08%` for seed 3 and `5.53%` for seeds 4 and 5. The timing rule was selected
+from these same trajectories, so this is a protocol-development result, not a
+held-out deployment claim. The next experiment must lock the stop rule at
+`2176`, test it on a fresh seed, and only then train a gate to predict whether
+the shadow endpoint is worth exposing.
