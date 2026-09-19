@@ -259,7 +259,9 @@ widths and data sources. It remains a baseline result at roughly `1.13x`, not
 the 10x contract gate and not a learned policy. The next rung is a minimal
 cost-aware action gate over `{noop, shadow-stop-512, shadow-full-768}`; train
 it only after the duration is represented in the response atlas, and preserve
-no-op abstention on unsupported roots.
+no-op abstention on unsupported roots. The fresh fixed-gate roster and pass
+rule are preregistered in
+[`SHADOW_GATE_PREREGISTRATION.md`](SHADOW_GATE_PREREGISTRATION.md).
 
 ## Direction amendment (2026-09-19): learned trajectory transport
 
