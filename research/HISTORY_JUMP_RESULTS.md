@@ -368,20 +368,23 @@ zero failures:
 | 3, stop 2048 | `1.47869` | `1.48249` | `0.00380` | `47.43s` | `66.85s` | `33.25%` |
 | 4, stop 2176 | `1.46011` | `1.47555` | `0.01543` | `57.84s` | `66.90s` | `16.60%` |
 | 5, stop 2176 | `1.46427` | `1.47813` | `0.01387` | `58.10s` | `67.12s` | `16.60%` |
+| 6, stop 2176 | `1.45713` | `1.47738` | `0.02025` | `58.72s` | `67.01s` | `16.60%` |
+| 7, stop 2176 | `1.45811` | `1.47488` | `0.01677` | `58.98s` | `66.89s` | `16.60%` |
+| 8, stop 2176 | `1.45364` | `1.46851` | `0.01487` | `59.10s` | `67.23s` | `16.60%` |
 
-A fresh seed-6 holdout using the locked `2176` rule also passed: the exact
-parent shadow endpoint was `1.45713` versus `1.47738` for the full no-op,
-with `58.72s` versus `67.01s` of marginal branch time and `16.60%` less
-branch compute. This is a real held-out timing result for the fixed rule, not
-just another post-hoc scan.
+The three fresh holdouts (seeds 6–8) all passed the locked rule. Their mean
+endpoint improvement was `0.01730`, and their wall-time reductions on the
+marginal branch were `12.10%`, `11.83%`, and `12.10%`. This is a real held-out
+timing result for the fixed rule, not just another post-hoc scan.
 
 This is the first exact-parent cost-to-target result: a shadow endpoint can
 reach the matched full-run quality with less continuation work, rather than
 only improving the endpoint at fixed work. The reported compute reduction is
 for the branch after the shared 1536-step parent. If the common prefix is also
 charged from initialization, the corresponding end-to-end reductions are only
-`11.08%` for seed 3 and `5.53%` for seeds 4–6. The
-timing rule was selected from seeds 3–5, so seed 6 is the first held-out
-deployment result. It is encouraging but too small for promotion; run more
-fresh seeds and then train a gate to predict whether the shadow endpoint is
-worth exposing.
+`11.08%` for seed 3 and `5.53%` for seeds 4–8. The timing rule was selected
+from seeds 3–5, so seeds 6–8 are held-out deployment results. The result is
+now strong enough to promote the fixed shadow timing rule as a baseline, but
+not as a learned driver: it is still an offline endpoint average with a
+hand-locked stopping time. The next driver step is to learn the timing and
+acceptance gate, with the fixed rule retained as its safety baseline.
