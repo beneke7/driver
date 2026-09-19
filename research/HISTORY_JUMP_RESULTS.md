@@ -369,13 +369,19 @@ zero failures:
 | 4, stop 2176 | `1.46011` | `1.47555` | `0.01543` | `57.84s` | `66.90s` | `16.60%` |
 | 5, stop 2176 | `1.46427` | `1.47813` | `0.01387` | `58.10s` | `67.12s` | `16.60%` |
 
+A fresh seed-6 holdout using the locked `2176` rule also passed: the exact
+parent shadow endpoint was `1.45713` versus `1.47738` for the full no-op,
+with `58.72s` versus `67.01s` of marginal branch time and `16.60%` less
+branch compute. This is a real held-out timing result for the fixed rule, not
+just another post-hoc scan.
+
 This is the first exact-parent cost-to-target result: a shadow endpoint can
 reach the matched full-run quality with less continuation work, rather than
 only improving the endpoint at fixed work. The reported compute reduction is
 for the branch after the shared 1536-step parent. If the common prefix is also
 charged from initialization, the corresponding end-to-end reductions are only
-`11.08%` for seed 3 and `5.53%` for seeds 4 and 5. The timing rule was selected
-from these same trajectories, so this is a protocol-development result, not a
-held-out deployment claim. The next experiment must lock the stop rule at
-`2176`, test it on a fresh seed, and only then train a gate to predict whether
-the shadow endpoint is worth exposing.
+`11.08%` for seed 3 and `5.53%` for seeds 4–6. The
+timing rule was selected from seeds 3–5, so seed 6 is the first held-out
+deployment result. It is encouraging but too small for promotion; run more
+fresh seeds and then train a gate to predict whether the shadow endpoint is
+worth exposing.
