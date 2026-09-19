@@ -519,3 +519,22 @@ width/data holdout at every horizon. Phase accuracy is largely a schedule
 label and is not a dynamics claim. The result supports compact numerical
 history features while closing the shortcut of scaling the steerer before
 regime support and action-conditioned targets are available.
+
+### Multi-horizon cost-aware gate (2026-09-19)
+
+The preregistered three-sigma gate was evaluated without retraining the
+response models. On six FineWeb-Edu 85M timing holdout groups it selected one
+shadow action and five no-op fallbacks; the selected late branch improved final
+loss but violated the recovery tolerance once (`+0.00267`). The pooled
+geometric ratios were only `1.0167x` wall, `1.0177x` FLOPs, and `1.0177x`
+tokens because the gate abstained on most groups. On nine changed-regime
+calibration groups it selected four actions with no recovery violations, but
+the final mean (`-0.012733`) was worse than the action-only prior
+(`-0.019329`). See
+[`MULTIHORIZON_GATE_RESULTS.md`](MULTIHORIZON_GATE_RESULTS.md).
+
+This closes the current two-action selector rung: uncertainty-aware
+abstention improves safety accounting but has not produced a useful
+held-out policy. Keep it as a control. Do not scale the steerer or add
+planning/RL; a next rung needs a new preregistered causal action family and a
+matched small oracle ceiling first.
