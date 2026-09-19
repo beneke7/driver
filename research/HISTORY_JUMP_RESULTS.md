@@ -723,3 +723,10 @@ The next implementation should expose `pulse strength`, `shadow window`, and
 `stop horizon` as separate actions, train a conservative gate on complete-root
 holdouts, and fall back to the safe `2176` shadow endpoint whenever the
 2048 prediction is unsupported or uncertain.
+
+The larger-skip boundary was tested from a 139M FineWeb parent at global
+`1024`. Uniform `2.0/2.0` pulse plus shadow merge at global `2048` ended at
+`1.56311` versus full no-op `1.50015`; the raw candidate was `1.61340`. The
+plain shadow branch from this parent had already missed, so the pulse does not
+rescue an earlier trajectory. The current positive region is therefore local
+to the later `1536` parent, not a generic “skip half the run” rule.
