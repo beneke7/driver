@@ -584,3 +584,19 @@ which makes the changed-data result a useful warning against treating action
 identity as transferable knowledge. The next driver must learn timing and
 calibrate its expected gain on held-out data regimes, not merely recognize the
 shadow action.
+
+The same action set at 139M on TinyStories separates width from data effects:
+
+| Width | No-op | Live average | Live extrapolate | Shadow merged |
+| ---: | ---: | ---: | ---: | ---: |
+| 768 | `0.85061` | `0.85546` | `0.85196` | `0.84538` |
+| 1024 | `0.84911` | `0.85325` | `0.84876` | `0.83929` |
+
+At 139M, shadow gained `0.00982` and extrapolation gained `0.00035`; averaging
+still lost `0.00415`. Thus width changes the magnitude and even the sign of
+the live extrapolation effect, while shadow remains the most reliable action
+in this small changed-data sample. A selector trained on the FineWeb roots
+plus the TinyStories 85M root had full support on the TinyStories 139M root,
+but its predicted shadow delta was still positive (`+0.00193`, RMSE
+`0.00759`). The conservative risk gate therefore abstained and the explicit
+shadow fallback realized the `0.00982` gain. Support alone is not calibration.
