@@ -128,6 +128,43 @@ oracle's real-branch baseline under the same ledger. If it cannot reproduce
 the measured action ranking and state consistency, stop transport work and
 pivot to data/work allocation or initialization.
 
+## Learned role-wise probe
+
+The first non-oracle action used the only basis available from a short
+calibration history: the parameter difference between steps 1408 and 1536.
+It learned one scalar coefficient per tensor role from training roots and
+applied that structured delta at step 1536. The candidate then advanced the
+data cursor to step 2048, preserved AdamW moments, and continued for 256
+steps. The future checkpoint was never loaded by the candidate.
+
+The FineWeb-85M training coefficients were:
+
+```text
+embedding 2.5959   attention 0.1368   mlp 0.3499   norm 3.2107   head 0.7382
+```
+
+Held-out results:
+
+| Training roots | Held-out roots | Passes | Final deltas |
+| --- | --- | ---: | --- |
+| FineWeb 85M seeds 3--5 | TinyStories 85M seeds 3--5 | 0/3 | `+0.03197, +0.03227, +0.03058` |
+| FineWeb 85M seeds 3--4 | FineWeb 85M seed 5 | 0/1 | `+0.05432` |
+
+The hindsight future-weight oracle passed 3/3 of those TinyStories roots, so
+this is a failure of the available action basis/policy, not evidence that the
+TinyStories target is intrinsically untransportable. The layer-wise audit
+explains the gap: a single recent basis captures much of embedding/norm future
+energy but only about 4--13% of attention/MLP future energy. Adding one scalar
+per layer raises MLP explained energy to only about 5--6% on the tested roots;
+attention remains near 1%. The parent AdamW preconditioned moment direction
+adds only about 1--3% explained attention/MLP energy.
+
+This closes the single-recent-delta role-wise policy as a promotion path. Do
+not scale its model. A richer action basis would need explicitly measured
+layer/gradient/curvature directions and a new costed probe; otherwise the
+next efficient hypothesis is data/work allocation rather than parameter
+transport.
+
 The generated manifests are intentionally ignored run artifacts:
 
 - `runs/trajectory-transport-oracle-fineweb85-seed3-5/manifest.json`

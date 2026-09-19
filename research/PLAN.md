@@ -312,3 +312,12 @@ role-wise parameter and optimizer-state deltas from short calibration history
 and must be evaluated on real branches. No planner, RL, or larger steerer is
 justified until that model beats noop and the action-only baseline under the
 same cost ledger.
+
+The first learned role-wise baseline is now also negative. FineWeb-trained
+coefficients applied to held-out TinyStories roots failed 3/3 by about `+0.031`
+final loss; a FineWeb leave-one-root-out test failed by `+0.054`. Offline
+projections show that a recent parameter or parent AdamW-moment direction
+contains little future attention/MLP direction. The single-basis transport
+policy is closed. A richer basis must earn a new probe, otherwise move the
+next oracle screen to data/work allocation rather than increasing steerer
+capacity.
