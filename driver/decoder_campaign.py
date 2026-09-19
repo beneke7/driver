@@ -81,6 +81,7 @@ class CampaignConfig:
     validation_file: str | None = None
     learning_rate: float = 3e-4
     weight_decay: float = 0.1
+    optimizer: str = "adamw"
     amp: bool = True
     pulse_attention: float = 1.05
     pulse_mlp: float = 0.95
@@ -180,18 +181,112 @@ def _target_config(campaign: CampaignConfig, landscape: str, seed: int) -> Confi
         final_steps=campaign.final_steps,
         learning_rate=campaign.learning_rate,
         weight_decay=campaign.weight_decay,
+        optimizer=campaign.optimizer,
         pulse_attention=campaign.pulse_attention,
         pulse_mlp=campaign.pulse_mlp,
     )
 
 
+class _CombinedStateView:
+    def __init__(self, *states: dict[torch.nn.Parameter, dict[str, Any]]):
+        self._states = states
+
+    def get(self, parameter: torch.nn.Parameter, default: Any = None) -> Any:
+        for state in self._states:
+            if parameter in state:
+                return state[parameter]
+        return default
+
+    def values(self):
+        for state in self._states:
+            yield from state.values()
+
+
+class _MuonAdamW:
+    """Expose two native optimizers through the campaign's optimizer contract."""
+
+    def __init__(self, muon: torch.optim.Optimizer, adamw: torch.optim.Optimizer):
+        self.muon = muon
+        self.adamw = adamw
+        self.param_groups = muon.param_groups + adamw.param_groups
+
+    @property
+    def state(self) -> _CombinedStateView:
+        return _CombinedStateView(self.muon.state, self.adamw.state)
+
+    def zero_grad(self, *, set_to_none: bool = True) -> None:
+        self.muon.zero_grad(set_to_none=set_to_none)
+        self.adamw.zero_grad(set_to_none=set_to_none)
+
+    def step(self) -> None:
+        self.muon.step()
+        self.adamw.step()
+
+    def state_dict(self) -> dict[str, Any]:
+        return {"muon": self.muon.state_dict(), "adamw": self.adamw.state_dict()}
+
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+        if set(state_dict) != {"muon", "adamw"}:
+            raise ValueError("Muon/AdamW checkpoint has an unexpected optimizer state")
+        self.muon.load_state_dict(state_dict["muon"])
+        self.adamw.load_state_dict(state_dict["adamw"])
+
+
 def _model_and_optimizer(
     config: Config, device: torch.device
-) -> tuple[DecoderLM, torch.optim.Optimizer]:
+) -> tuple[DecoderLM, torch.optim.Optimizer | _MuonAdamW]:
     model = DecoderLM(config).to(device)
     grouped: dict[str, list[torch.nn.Parameter]] = defaultdict(list)
     for name, parameter in model.named_parameters():
         grouped[_role(name)].append(parameter)
+    if config.optimizer == "muon":
+        muon_parameters = {
+            role: [parameter for parameter in grouped[role] if parameter.ndim == 2]
+            for role in ("attention", "mlp")
+        }
+        adam_parameters = {
+            role: [
+                parameter
+                for parameter in grouped[role]
+                if role not in {"attention", "mlp"} or parameter.ndim != 2
+            ]
+            for role in ("embedding", "attention", "mlp", "norm", "head")
+        }
+        muon_groups = [
+            {"params": muon_parameters[role], "role": role}
+            for role in ("attention", "mlp")
+            if muon_parameters[role]
+        ]
+        adam_groups = [
+            {
+                "params": adam_parameters[role],
+                "lr": config.learning_rate,
+                "weight_decay": config.weight_decay,
+                "role": role,
+            }
+            for role in ("embedding", "norm", "head")
+            if adam_parameters[role]
+        ]
+        adam_groups.extend(
+            {
+                "params": adam_parameters[role],
+                "lr": config.learning_rate,
+                "weight_decay": config.weight_decay,
+                "role": role,
+            }
+            for role in ("attention", "mlp")
+            if adam_parameters[role]
+        )
+        muon = torch.optim.Muon(
+            muon_groups,
+            lr=config.learning_rate,
+            weight_decay=config.weight_decay,
+            adjust_lr_fn="match_rms_adamw",
+        )
+        adamw = torch.optim.AdamW(adam_groups)
+        return model, _MuonAdamW(muon, adamw)
+    if config.optimizer != "adamw":
+        raise ValueError(f"unknown optimizer: {config.optimizer}")
     parameters = [
         {
             "params": grouped[role],
@@ -1526,6 +1621,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         train_file=args.train_file,
         validation_file=args.validation_file,
         learning_rate=args.learning_rate,
+        optimizer=args.optimizer,
         pulse_attention=args.pulse_attention,
         pulse_mlp=args.pulse_mlp,
         open_loop_start=args.open_loop_start,
@@ -1738,6 +1834,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--train-file")
     parser.add_argument("--validation-file")
     parser.add_argument("--learning-rate", type=float, default=CampaignConfig.learning_rate)
+    parser.add_argument("--optimizer", choices=("adamw", "muon"), default=CampaignConfig.optimizer)
     parser.add_argument("--pulse-attention", type=float, default=CampaignConfig.pulse_attention)
     parser.add_argument("--pulse-mlp", type=float, default=CampaignConfig.pulse_mlp)
     parser.add_argument("--open-loop-start", type=float, default=CampaignConfig.open_loop_start)

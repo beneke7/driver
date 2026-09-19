@@ -41,6 +41,7 @@ class Config:
     final_steps: int = 40
     learning_rate: float = 3e-4
     weight_decay: float = 0.1
+    optimizer: str = "adamw"
     pulse_attention: float = 1.05
     pulse_mlp: float = 0.95
     pulse_embedding: float = 1.0
