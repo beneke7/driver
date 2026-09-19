@@ -480,3 +480,28 @@ fixed shadow rule rather than a learned driver. A third exact 139M seed 4
 also passed: early `1.50529` versus no-op `1.50885`, with `68.79s` versus
 `96.59s`. The fixed 2048 timing mechanism has now replicated across three
 139M seeds.
+
+### History-enabled action states
+
+After adding the last 16 parent telemetry rows to each branch record, three
+fresh 85M action sets supplied the first usable history-conditioned examples:
+
+| Seed | No-op | Live average | Live extrapolate | Shadow merged |
+| --- | ---: | ---: | ---: | ---: |
+| 12 | `1.47867` | `1.48265` | `1.48028` | `1.44484` |
+| 13 | `1.47553` | `1.48010` | `1.47444` | `1.44160` |
+| 14 | `1.47515` | `1.48033` | `1.47783` | `1.43923` |
+
+All branches succeeded and stored 16 parent rows. Shadow gains were
+`0.03383`, `0.03393`, and `0.03592`. Live extrapolation was mixed: it lost by
+`0.00162` and `0.00268` on seeds 12 and 14 but gained `0.00109` on seed 13.
+A leave-one-seed-out ridge head over the history plus action identity still
+selected shadow on all three splits, and its RMSE was no better than the
+action-only prior. The history path is now ready for a larger archive, but it
+has not earned online adaptation or a deeper policy yet.
+
+The current timing policy is therefore architecture-conditioned but still
+fixed: the 85M holdouts use global step `2176`, while three exact 139M seeds
+use `2048`. This is a useful explicit input for the future driver and gives
+the same action a measurable width-dependent timing signal; it is not yet a
+learned architecture-transfer result.
