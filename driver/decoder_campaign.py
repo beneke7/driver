@@ -90,6 +90,12 @@ class CampaignConfig:
     amp: bool = True
     pulse_attention: float = 1.05
     pulse_mlp: float = 0.95
+    pulse_small_attention: float = 1.10
+    pulse_small_mlp: float = 0.90
+    pulse_medium_attention: float = 1.50
+    pulse_medium_mlp: float = 0.50
+    pulse_large_attention: float = 2.00
+    pulse_large_mlp: float = 0.25
     open_loop_start: float = 1.10
     open_loop_end: float = 0.95
     trajectory_interval: int = 32
@@ -557,9 +563,18 @@ def _schedule_multipliers(
     if schedule in {"role_pulse", *PULSE_STRATEGIES} and step < campaign.immediate_steps:
         pulse = {
             "role_pulse": (campaign.pulse_attention, campaign.pulse_mlp),
-            "role_pulse_small": (1.10, 0.90),
-            "role_pulse_medium": (1.50, 0.50),
-            "role_pulse_large": (2.00, 0.25),
+            "role_pulse_small": (
+                campaign.pulse_small_attention,
+                campaign.pulse_small_mlp,
+            ),
+            "role_pulse_medium": (
+                campaign.pulse_medium_attention,
+                campaign.pulse_medium_mlp,
+            ),
+            "role_pulse_large": (
+                campaign.pulse_large_attention,
+                campaign.pulse_large_mlp,
+            ),
         }[schedule]
         return 1.0, {"attention": pulse[0], "mlp": pulse[1]}
     if schedule == "damping" and step < campaign.immediate_steps:
@@ -1056,17 +1071,22 @@ def _branch(
             target_config,
             model,
             target_tokens,
-            campaign.immediate_steps
-            if selected_schedule in {"role_pulse", *PULSE_STRATEGIES}
-            else 0,
+            0,
         )
         parameter_count = sum(parameter.numel() for parameter in model.parameters())
+        pulse_overhead_flops = (
+            2.0 * parameter_count * campaign.immediate_steps
+            if selected_schedule in {"role_pulse", *PULSE_STRATEGIES}
+            else 0.0
+        )
+        target_flops += pulse_overhead_flops
         evaluation_flops = 2.0 * parameter_count * target_config.batch_size * target_config.context * (
             3 + int(intervention_loss is not None) + int(shadow_raw_final_loss is not None)
         )
         driver_inference_flops = 64.0
         driver_update_flops = 1.0 if proposal.strategy == "online_lr_control" else 0.0
         maneuver_flops = 0.0 if maneuver is None else float(maneuver["flops"])
+        action_overhead_flops = pulse_overhead_flops + maneuver_flops
         recovery_flops = _flops(
             target_config,
             model,
@@ -1104,6 +1124,48 @@ def _branch(
             "trajectory_extrapolate_reset": 7.0,
             "trajectory_shadow_average": 8.0,
         }
+        action_parameters = {
+            "predicted_gain": proposal.predicted_gain,
+            "uncertainty": proposal.uncertainty,
+            "schedule_code": schedule_codes[selected_schedule],
+        }
+        if selected_schedule in {"role_pulse", *PULSE_STRATEGIES}:
+            _, pulse_roles = _schedule_multipliers(
+                selected_schedule, 0, campaign=campaign, runtime=runtime
+            )
+            action_parameters.update(
+                {
+                    "pulse_attention": pulse_roles["attention"],
+                    "pulse_mlp": pulse_roles["mlp"],
+                }
+            )
+        elif selected_schedule == "damping":
+            action_parameters["global_lr_multiplier"] = 0.80
+        cost_components = {
+            "target_flops": target_flops - recovery_flops - pulse_overhead_flops,
+            "driver_inference_flops": driver_inference_flops,
+            "driver_update_flops": driver_update_flops,
+            "probe_flops": 0.0,
+            "recovery_flops": recovery_flops,
+            "evaluation_flops": evaluation_flops,
+            "rejected_branch_flops": 0.0,
+            "meta_training_flops": 0.0,
+            "search_flops": 0.0,
+            "action_overhead_flops": action_overhead_flops,
+            "other_flops": 0.0,
+        }
+        expected_compute_flops = sum(cost_components.values())
+        actual_compute_flops = (
+            target_flops
+            + evaluation_flops
+            + maneuver_flops
+            + driver_inference_flops
+            + driver_update_flops
+        )
+        if not math.isclose(
+            expected_compute_flops, actual_compute_flops, rel_tol=1e-12, abs_tol=1.0
+        ):
+            raise RuntimeError("decoder campaign cost components do not sum to compute_flops")
         transition = Transition(
             transition_id=f"{target_config.landscape}-{target_config.seed}:{proposal.strategy}",
             run_id=f"{target_config.landscape}-{target_config.seed}",
@@ -1112,11 +1174,7 @@ def _branch(
             action=Action(
                 proposal.strategy,
                 strength=proposal.lr_multiplier,
-                parameters={
-                    "predicted_gain": proposal.predicted_gain,
-                    "uncertainty": proposal.uncertainty,
-                    "schedule_code": schedule_codes[selected_schedule],
-                },
+                parameters=action_parameters,
             ),
             after=after,
             compute_flops=(
@@ -1147,16 +1205,21 @@ def _branch(
                 "telemetry": telemetry,
                 "target_tokens": target_tokens,
                 "target_flops": target_flops,
+                "target_training_flops": target_flops - pulse_overhead_flops,
+                "pulse_overhead_flops": pulse_overhead_flops,
                 "driver_inference_flops": driver_inference_flops,
                 "driver_update_flops": driver_update_flops,
                 "maneuver_flops": maneuver_flops,
+                "action_overhead_flops": action_overhead_flops,
                 "probe_flops": 0.0,
                 "recovery_flops": recovery_flops,
                 "evaluation_flops": evaluation_flops,
+                "cost_components": cost_components,
                 "driver_cost": {
                     "inference_flops": driver_inference_flops,
                     "update_flops": driver_update_flops,
                     "maneuver_flops": maneuver_flops,
+                    "action_overhead_flops": action_overhead_flops,
                     "probe_flops": 0.0,
                     "recovery_flops": recovery_flops,
                     "evaluation_flops": evaluation_flops,
@@ -1647,6 +1710,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         optimizer=args.optimizer,
         pulse_attention=args.pulse_attention,
         pulse_mlp=args.pulse_mlp,
+        pulse_small_attention=args.pulse_small_attention,
+        pulse_small_mlp=args.pulse_small_mlp,
+        pulse_medium_attention=args.pulse_medium_attention,
+        pulse_medium_mlp=args.pulse_medium_mlp,
+        pulse_large_attention=args.pulse_large_attention,
+        pulse_large_mlp=args.pulse_large_mlp,
         open_loop_start=args.open_loop_start,
         open_loop_end=args.open_loop_end,
         trajectory_interval=args.trajectory_interval,
@@ -1662,6 +1731,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("trajectory interval and window must be positive")
     if not math.isfinite(campaign.trajectory_alpha):
         raise ValueError("trajectory_alpha must be finite")
+    for name in (
+        "pulse_attention",
+        "pulse_mlp",
+        "pulse_small_attention",
+        "pulse_small_mlp",
+        "pulse_medium_attention",
+        "pulse_medium_mlp",
+        "pulse_large_attention",
+        "pulse_large_mlp",
+    ):
+        value = getattr(campaign, name)
+        if not math.isfinite(value) or value <= 0.0:
+            raise ValueError(f"{name} must be finite and positive")
     if not (
         0 < campaign.immediate_steps <= campaign.recovery_steps < campaign.final_steps
     ):
@@ -1860,6 +1942,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--optimizer", choices=("adamw", "muon"), default=CampaignConfig.optimizer)
     parser.add_argument("--pulse-attention", type=float, default=CampaignConfig.pulse_attention)
     parser.add_argument("--pulse-mlp", type=float, default=CampaignConfig.pulse_mlp)
+    parser.add_argument(
+        "--pulse-small-attention",
+        type=float,
+        default=CampaignConfig.pulse_small_attention,
+    )
+    parser.add_argument(
+        "--pulse-small-mlp", type=float, default=CampaignConfig.pulse_small_mlp
+    )
+    parser.add_argument(
+        "--pulse-medium-attention",
+        type=float,
+        default=CampaignConfig.pulse_medium_attention,
+    )
+    parser.add_argument(
+        "--pulse-medium-mlp", type=float, default=CampaignConfig.pulse_medium_mlp
+    )
+    parser.add_argument(
+        "--pulse-large-attention",
+        type=float,
+        default=CampaignConfig.pulse_large_attention,
+    )
+    parser.add_argument(
+        "--pulse-large-mlp", type=float, default=CampaignConfig.pulse_large_mlp
+    )
     parser.add_argument("--open-loop-start", type=float, default=CampaignConfig.open_loop_start)
     parser.add_argument("--open-loop-end", type=float, default=CampaignConfig.open_loop_end)
     parser.add_argument(

@@ -31,6 +31,7 @@ FLOP_COMPONENTS = (
     "rejected_branch_flops",
     "meta_training_flops",
     "search_flops",
+    "action_overhead_flops",
     "other_flops",
 )
 
@@ -152,42 +153,59 @@ def _branch_cost(
     branch_target_flops = _non_negative(
         metadata.get("target_flops", 0.0), "target_flops"
     )
-    branch_components = {
-        # Recovery is a named additive component; remove it from target work
-        # here because the campaign's target_flops includes all branch steps.
-        "target_flops": max(0.0, branch_target_flops - recovery_flops),
-        "driver_inference_flops": _non_negative(
-            driver_cost.get("inference_flops", metadata.get("driver_inference_flops", 0.0)),
-            "driver_inference_flops",
-        ),
-        "recovery_flops": recovery_flops,
-        "driver_update_flops": _non_negative(
-            driver_cost.get("update_flops", metadata.get("driver_update_flops", 0.0)),
-            "driver_update_flops",
-        ),
-        "probe_flops": _non_negative(driver_cost.get("probe_flops", 0.0), "probe_flops"),
-        "evaluation_flops": _non_negative(
-            driver_cost.get("evaluation_flops", metadata.get("evaluation_flops", 0.0)),
-            "evaluation_flops",
-        ),
-        "rejected_branch_flops": _non_negative(
-            driver_cost.get("rejected_branch_flops", 0.0), "rejected_branch_flops"
-        ),
-        "meta_training_flops": _non_negative(
-            driver_cost.get("meta_training_flops", 0.0), "meta_training_flops"
-        ),
-        "search_flops": _non_negative(
-            driver_cost.get("search_flops", 0.0), "search_flops"
-        ),
-        "other_flops": 0.0,
-    }
-    known = sum(branch_components.values())
-    accounting_error = branch_total - known
-    if accounting_error >= 0.0:
-        branch_components["other_flops"] = accounting_error
+    raw_components = metadata.get("cost_components")
+    if isinstance(raw_components, Mapping):
+        branch_components = {
+            name: _non_negative(
+                raw_components.get(name, 0.0), f"cost_components.{name}"
+            )
+            for name in FLOP_COMPONENTS
+        }
+        accounting_error = abs(branch_total - sum(branch_components.values()))
+        if accounting_error > max(1.0, branch_total) * 1e-12:
+            raise ValueError(
+                "transition cost_components do not sum to transition.compute_flops"
+            )
     else:
-        # Keep the source ledger authoritative and make an over-report visible.
-        accounting_error = abs(accounting_error)
+        branch_components = {
+            # Recovery is a named additive component; remove it from target work
+            # here because older campaigns' target_flops includes all branch steps.
+            "target_flops": max(0.0, branch_target_flops - recovery_flops),
+            "driver_inference_flops": _non_negative(
+                driver_cost.get("inference_flops", metadata.get("driver_inference_flops", 0.0)),
+                "driver_inference_flops",
+            ),
+            "recovery_flops": recovery_flops,
+            "driver_update_flops": _non_negative(
+                driver_cost.get("update_flops", metadata.get("driver_update_flops", 0.0)),
+                "driver_update_flops",
+            ),
+            "probe_flops": _non_negative(driver_cost.get("probe_flops", 0.0), "probe_flops"),
+            "evaluation_flops": _non_negative(
+                driver_cost.get("evaluation_flops", metadata.get("evaluation_flops", 0.0)),
+                "evaluation_flops",
+            ),
+            "rejected_branch_flops": _non_negative(
+                driver_cost.get("rejected_branch_flops", 0.0), "rejected_branch_flops"
+            ),
+            "meta_training_flops": _non_negative(
+                driver_cost.get("meta_training_flops", 0.0), "meta_training_flops"
+            ),
+            "search_flops": _non_negative(
+                driver_cost.get("search_flops", 0.0), "search_flops"
+            ),
+            "action_overhead_flops": _non_negative(
+                metadata.get("maneuver_flops", 0.0), "action_overhead_flops"
+            ),
+            "other_flops": 0.0,
+        }
+        known = sum(branch_components.values())
+        accounting_error = branch_total - known
+        if accounting_error >= 0.0:
+            branch_components["other_flops"] = accounting_error
+        else:
+            # Keep the source ledger authoritative and make an over-report visible.
+            accounting_error = abs(accounting_error)
     branch_tokens = int(metadata.get("target_tokens", 0))
     branch_wall = _non_negative(row.get("wall_seconds"), "transition.wall_seconds")
     components = dict(branch_components)
@@ -294,11 +312,17 @@ def _record(
     risk = {
         "failed": failed,
         "failure": failure,
-        "unsafe_horizon": (
+        "quality_regression": (
             response["safe_loss_delta_vs_noop"] is not None
             and response["safe_loss_delta_vs_noop"] > 0.0
         ),
+        "durable_quality_regression": (
+            response["final_loss_delta_vs_noop"] is not None
+            and response["final_loss_delta_vs_noop"] > 0.0
+        ),
+        "catastrophic_failure": failed or failure is not None,
     }
+    risk["unsafe_horizon"] = risk["quality_regression"] or risk["catastrophic_failure"]
     provenance = {
         "source_checkpoint_sha256": str(
             metadata.get("source_checkpoint_sha256", case.get("parent_checkpoint_sha256", ""))
@@ -432,7 +456,7 @@ def collect(results: list[Path], *, require_matched: bool = False) -> tuple[list
             "wall": "prefix plus branch end-to-end wall_seconds",
             "flops": "prefix plus branch compute_flops; additive components preserve reported driver work",
             "tokens": "prefix plus branch target_tokens",
-            "recovery_flops": "named additive component removed from target_flops to avoid double counting",
+            "recovery_flops": "named additive component; new campaigns provide an additive cost_components ledger",
         },
     }
     return records, summary
@@ -494,6 +518,11 @@ def _self_check() -> None:
                 "target_flops": 20.0,
                 "target_tokens": 10,
                 "driver_cost": {"inference_flops": 1.0, "evaluation_flops": 9.0},
+                "cost_components": {
+                    "target_flops": 20.0,
+                    "driver_inference_flops": 1.0,
+                    "evaluation_flops": 9.0,
+                },
                 "parent_history": [{"step": 9, "loss": 2.1}],
                 "horizon_metrics": [
                     {"name": "immediate", "loss": 1.9},
