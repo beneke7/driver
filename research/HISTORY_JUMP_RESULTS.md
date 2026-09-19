@@ -494,6 +494,8 @@ fresh 85M action sets supplied the first usable history-conditioned examples:
 | 15 | `1.47614` | `1.48224` | `1.47804` | `1.44112` |
 | 16 | `1.47779` | `1.48477` | `1.48187` | `1.44207` |
 | 17, parent 1792 | `1.48632` | `1.49098` | `1.48603` | `1.45171` |
+| 139M-5 | `1.50609` | `1.50701` | `1.50493` | `1.46615` |
+| 139M-6 | `1.51096` | `1.51857` | `1.51665` | `1.47528` |
 
 All branches succeeded and stored 16 parent rows. Shadow gains were
 `0.03383`, `0.03393`, and `0.03592`. Live extrapolation was mixed: it lost by
@@ -510,6 +512,14 @@ Seeds 15 and 16 restored the usual split, with shadow gains `0.03502` and
 zero, so it abstained. This stress-tests the support contract: the model must
 not extrapolate from 1536-parent histories to a 1792-parent decision until
 that regime is represented in training.
+
+The 139M history roots also separated extrapolation: seed 5 gained `0.00117`
+while seed 6 lost `0.00568`; shadow gained `0.03994` and `0.03568`. Training
+on the five 85M roots plus 139M seed 5, then holding out 139M seed 6, gave
+the action selector support rate `1.0`, prediction RMSE `0.0097`, and the
+correct shadow choice. The actual selected gain was `0.03568`, equal to the
+action-prior choice. This is the first safe cross-width selector transfer,
+but still no evidence that telemetry beats the fixed action prior.
 
 The first reusable implementation is
 [`driver/trajectory_action_selector.py`](../driver/trajectory_action_selector.py).
