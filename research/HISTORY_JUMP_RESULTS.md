@@ -791,3 +791,12 @@ reached `0.77772`, a degradation of `0.01107` despite the shorter branch.
 The shortcut is therefore not a universal training accelerator. Any future
 driver must gate it on observed regime and trajectory features, with the
 full-length baseline as the safe fallback.
+
+The width-transfer screen used the same exact-parent protocol at 139M
+(`1024` width, `11` layers). The full Muon no-op ended at `1.32948` in
+`105.66s` of branch time; the 512-step shadow fork ended at `1.32281` in
+`74.95s`. After the shared `207.39s` prefix is charged, that is about `9.8%`
+lower end-to-end wall time, with `33.4%` fewer branch training FLOPs and a
+better endpoint. The current fixed heuristic therefore passes 4/4 FineWeb
+roots across 85M and 139M, but its TinyStories failure still requires a
+regime-aware gate before any broader claim.
