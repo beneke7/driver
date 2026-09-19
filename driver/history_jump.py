@@ -29,6 +29,7 @@ from .decoder_campaign import (
     TokenStream,
     _code_revision,
     _evaluate,
+    _flops,
     _hash_bytes,
     _hash_json,
     _hash_tensor,
@@ -36,6 +37,7 @@ from .decoder_campaign import (
     _safe_float,
     _sync,
     _train_step,
+    make_byte_stream,
     make_stream,
 )
 
@@ -56,6 +58,8 @@ class TraceConfig:
     learning_rate: float = 3e-4
     weight_decay: float = 0.1
     amp: bool = True
+    train_file: str | None = None
+    validation_file: str | None = None
 
 
 def _target_config(config: TraceConfig, landscape: str, seed: int) -> Config:
@@ -118,16 +122,32 @@ def _case_data(
     train_length = (
         config.steps + 6 * MAX_BENCHMARK_HORIZON + 1
     ) * config.batch_size * (config.context + 1)
-    validation_length = config.batch_size * (config.context + 1)
-    train_values = make_stream(
-        landscape, seed=seed, length=train_length, vocab_size=config.vocab_size
+    validation_length = (
+        CampaignConfig.validation_batches
+        * config.batch_size
+        * (config.context + 1)
     )
-    validation_values = make_stream(
-        landscape,
-        seed=seed + 1_000_000,
-        length=validation_length,
-        vocab_size=config.vocab_size,
-    )
+    if config.train_file:
+        if config.vocab_size < 256:
+            raise ValueError("byte-corpus runs require vocab_size >= 256")
+        train_values = make_byte_stream(
+            config.train_file, seed=seed, length=train_length
+        )
+        validation_values = make_byte_stream(
+            config.validation_file or config.train_file,
+            seed=seed + 1_000_000,
+            length=validation_length,
+        )
+    else:
+        train_values = make_stream(
+            landscape, seed=seed, length=train_length, vocab_size=config.vocab_size
+        )
+        validation_values = make_stream(
+            landscape,
+            seed=seed + 1_000_000,
+            length=validation_length,
+            vocab_size=config.vocab_size,
+        )
     data_sha = _hash_bytes(
         _hash_tensor(train_values).encode() + _hash_tensor(validation_values).encode()
     )
@@ -282,6 +302,8 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
         amp=not args.no_amp,
+        train_file=args.train_file,
+        validation_file=args.validation_file,
     )
     _validate_trace_config(config)
     landscapes = tuple(args.landscape or ("delayed_copy", "phase_switch", "text_shard"))
@@ -404,6 +426,83 @@ def _advance_stream(stream: TokenStream, *, steps: int, target_config: Config) -
 
 
 @torch.no_grad()
+def _advance_adamw_state(optimizer: torch.optim.Optimizer, *, steps: int) -> None:
+    if steps < 0:
+        raise ValueError("optimizer state advancement must be nonnegative")
+    if not isinstance(optimizer, torch.optim.AdamW):
+        raise ValueError("gradient probe jump currently requires AdamW")
+    for group in optimizer.param_groups:
+        beta1, beta2 = (float(value) for value in group["betas"])
+        for parameter in group["params"]:
+            state = optimizer.state.get(parameter)
+            if not state or "step" not in state:
+                raise ValueError("AdamW state is not initialized")
+            exp_avg = state.get("exp_avg")
+            exp_avg_sq = state.get("exp_avg_sq")
+            if exp_avg is None or exp_avg_sq is None:
+                raise ValueError("AdamW moment tensors are missing")
+            exp_avg.mul_(beta1**steps)
+            exp_avg_sq.mul_(beta2**steps)
+            step = state["step"]
+            if torch.is_tensor(step):
+                step.add_(steps)
+            else:
+                state["step"] = step + steps
+
+
+def _apply_probe_jump(
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    stream: TokenStream,
+    target_config: Config,
+    campaign: CampaignConfig,
+    *,
+    horizon: int,
+    blend: float,
+) -> dict[str, Any]:
+    if horizon < 2 or not math.isfinite(blend) or blend <= 0.0:
+        raise ValueError("probe jump requires horizon >= 2 and positive finite blend")
+    before = {
+        name: parameter.detach().clone()
+        for name, parameter in model.named_parameters()
+    }
+    _train_step(
+        model,
+        optimizer,
+        stream,
+        target_config,
+        campaign,
+        device=next(model.parameters()).device,
+        step=0,
+        schedule="noop",
+        runtime={},
+    )
+    parameter_count = 0
+    multiplier = blend * (horizon - 1)
+    with torch.no_grad():
+        for name, parameter in model.named_parameters():
+            parameter.add_(parameter - before[name], alpha=multiplier)
+            parameter_count += parameter.numel()
+    del before
+    _advance_adamw_state(optimizer, steps=horizon - 1)
+    skipped_tokens = _advance_stream(
+        stream, steps=horizon - 1, target_config=target_config
+    )
+    return {
+        "kind": "gradient_probe_jump",
+        "blend": blend,
+        "horizon": horizon,
+        "probe_steps": 1,
+        "skipped_steps": horizon - 1,
+        "optimizer_state": "decayed_moments_and_advanced_step",
+        "data_policy": "advanced_cursor",
+        "skipped_tokens": skipped_tokens,
+        "parameter_count": parameter_count,
+        "flops": 4.0 * parameter_count,
+    }
+
+
+@torch.no_grad()
 def _apply_secant_jump(
     model: nn.Module,
     previous: Path,
@@ -480,6 +579,8 @@ def _run_action(
                 runtime={},
             )
         jump_flops = 0.0
+        maneuver = None
+        skipped_steps = 0
     elif action in ("momentum_jump", "momentum_jump_decay"):
         parameter_count = _apply_momentum_jump(
             model,
@@ -490,6 +591,31 @@ def _run_action(
         )
         _advance_stream(stream, steps=horizon, target_config=target_config)
         jump_flops = 2.0 * parameter_count
+        maneuver = {
+            "kind": action,
+            "horizon": horizon,
+            "blend": blend,
+            "skipped_steps": horizon,
+            "data_policy": "advanced_cursor",
+            "optimizer_state": (
+                "decayed_moments_and_advanced_step"
+                if action == "momentum_jump_decay"
+                else "preserved"
+            ),
+        }
+        skipped_steps = horizon
+    elif action == "probe_jump":
+        maneuver = _apply_probe_jump(
+            model,
+            optimizer,
+            stream,
+            target_config,
+            campaign,
+            horizon=horizon,
+            blend=blend,
+        )
+        jump_flops = float(maneuver["flops"])
+        skipped_steps = horizon - 1
     elif action == "secant_jump":
         if previous is None:
             raise ValueError("secant jump requires a previous checkpoint")
@@ -504,6 +630,15 @@ def _run_action(
         )
         _advance_stream(stream, steps=horizon, target_config=target_config)
         jump_flops = 2.0 * parameter_count
+        maneuver = {
+            "kind": action,
+            "horizon": horizon,
+            "blend": blend,
+            "skipped_steps": horizon,
+            "data_policy": "advanced_cursor",
+            "optimizer_state": "preserved",
+        }
+        skipped_steps = horizon
     else:
         raise ValueError(f"unknown action: {action}")
     immediate = _evaluate(
@@ -555,10 +690,19 @@ def _run_action(
     wall_seconds = time.perf_counter() - started
     parameters = sum(parameter.numel() for parameter in model.parameters())
     consumed_tokens = 6 * batch_tokens * horizon
-    target_tokens = (5 if action != "noop" else 6) * batch_tokens * horizon
+    trained_steps = (
+        6 * horizon
+        if action == "noop"
+        else 5 * horizon + int(action == "probe_jump")
+    )
+    target_tokens = trained_steps * batch_tokens
+    skipped_tokens = skipped_steps * batch_tokens
     evaluation_flops = 2.0 * parameters * batch_tokens * 3
     target_flops = 6.0 * parameters * target_tokens
     flops = target_flops + evaluation_flops + jump_flops
+    conservative_flops = flops + _flops(
+        target_config, model, skipped_tokens
+    )
     result = {
         "action": action,
         "horizon": horizon,
@@ -569,8 +713,23 @@ def _run_action(
         "wall_seconds": wall_seconds,
         "tokens_consumed": consumed_tokens,
         "tokens_trained": target_tokens,
+        "tokens_skipped": skipped_tokens,
         "estimated_flops": flops,
+        "conservative_estimated_flops": conservative_flops,
+        "flop_speedup_if_skipped": (
+            _flops(target_config, model, consumed_tokens) / flops
+            if flops > 0.0
+            else 0.0
+        ),
+        "conservative_flop_speedup": (
+            _flops(target_config, model, consumed_tokens) / conservative_flops
+            if conservative_flops > 0.0
+            else 0.0
+        ),
         "jump_flops": jump_flops,
+        "maneuver": maneuver,
+        "parent_cursor": int(metadata["data_state"]["cursor"]),
+        "candidate_cursor": stream.cursor,
         "failed": False,
     }
     del model, optimizer
@@ -719,7 +878,50 @@ def _self_check() -> None:
         for previous, current in zip(before, model.parameters())
     )
     assert all(torch.isfinite(parameter).all() for parameter in model.parameters())
-    print("history-jump self-check passed: AdamW direction and bounded jump")
+    probe_config = Config(
+        landscape="text_shard",
+        seed=0,
+        vocab_size=16,
+        context=2,
+        batch_size=1,
+        width=8,
+        layers=1,
+        heads=1,
+        prefix_steps=0,
+        immediate_steps=1,
+        recovery_steps=2,
+        final_steps=3,
+    )
+    probe_campaign = CampaignConfig(
+        width=8,
+        layers=1,
+        heads=1,
+        vocab_size=16,
+        context=2,
+        batch_size=1,
+        prefix_steps=0,
+        immediate_steps=1,
+        recovery_steps=2,
+        final_steps=3,
+        amp=False,
+    )
+    probe_model, probe_optimizer = _model_and_optimizer(
+        probe_config, torch.device("cpu")
+    )
+    probe_stream = TokenStream(torch.randint(0, 16, (128,), dtype=torch.uint8))
+    probe = _apply_probe_jump(
+        probe_model,
+        probe_optimizer,
+        probe_stream,
+        probe_config,
+        probe_campaign,
+        horizon=4,
+        blend=0.5,
+    )
+    assert probe["skipped_steps"] == 3
+    assert probe_stream.cursor == 4 * (probe_config.context + 1)
+    assert int(next(iter(probe_optimizer.state.values()))["step"].item()) == 4
+    print("history-jump self-check passed: AdamW direction and probe jump")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -740,6 +942,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint-every", type=int, default=TraceConfig.checkpoint_every)
     parser.add_argument("--learning-rate", type=float, default=TraceConfig.learning_rate)
     parser.add_argument("--weight-decay", type=float, default=TraceConfig.weight_decay)
+    parser.add_argument("--train-file")
+    parser.add_argument("--validation-file")
     parser.add_argument("--no-amp", action="store_true")
     parser.add_argument("--allow-small-target", action="store_true")
     parser.add_argument("--horizon", type=int, action="append")
@@ -747,7 +951,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--action",
         action="append",
-        choices=("momentum_jump", "momentum_jump_decay", "secant_jump"),
+        choices=("momentum_jump", "momentum_jump_decay", "secant_jump", "probe_jump"),
     )
     parser.add_argument("--max-parents", type=int)
     return parser
