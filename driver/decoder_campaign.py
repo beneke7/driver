@@ -1030,6 +1030,11 @@ def _branch(
                         config_sha=config_sha,
                         data_sha=data_sha,
                     )
+                    # Full decoder snapshots are large CPU allocations. Release
+                    # each serialization buffer before the next branch step;
+                    # retaining allocator state here has caused host-side
+                    # libtorch failures on long shadow branches.
+                    gc.collect()
                     shadow_snapshots.append(snapshot_path)
             immediate_loss: float | None = None
             if proposal.strategy == "online_lr_control" and phase_index == 0:
