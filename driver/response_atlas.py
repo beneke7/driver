@@ -350,6 +350,7 @@ def _record(
             "width": int(config.get("width", 0)),
             "layers": int(config.get("layers", 0)),
             "heads": int(config.get("heads", 0)),
+            "vocab_size": int(config.get("vocab_size", 0)),
             "context": int(config.get("context", 0)),
             "data_sha256": str(case.get("data_sha256", "")),
             "config_sha256": str(case.get("config_sha256", "")),

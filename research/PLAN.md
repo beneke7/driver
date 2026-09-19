@@ -149,3 +149,21 @@ policy continues to abstain. On the FineWeb-only holdout, final RMSE fell from
 `1.36` to `0.19`, but support remains `0` with only two training roots. This
 is a calibration improvement with a known ceiling, not permission to deploy a
 planner; more complete roots are required before changing the support gate.
+
+The third-regime extension adds three delayed-copy roots, bringing the clean
+pilot to nine roots and 72 matched action rows. Delayed-copy does not share a
+stable winner with the language regimes: its large pulse regresses by `+0.0080`
+on average, while damping, medium pulse, and small pulse are all close to zero
+and seed-dependent. Reset extrapolation remains consistently harmful (`+0.0196`
+final delta on delayed-copy), although less catastrophic than on the language
+corpora. The atlas now records `vocab_size` explicitly as architecture
+provenance and a model feature.
+
+When delayed-copy roots are held out after training on the two language
+regimes, the model correctly marks the architecture/data shift unsupported
+(support distance about `1377` versus radius `5.6`) and selects no-op. A
+delayed-copy-only model trained on two roots has final RMSE `0.0168` and perfect
+raw top-1 agreement on the one held-out root, but support is still zero and the
+safe policy abstains. This is a useful ranking diagnostic, not deployment
+evidence; the atlas needs more roots before its support calibration can be
+relaxed.

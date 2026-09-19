@@ -33,7 +33,7 @@ STATE_FIELDS = (
     "global_lr_multiplier",
 )
 HISTORY_FIELDS = STATE_FIELDS
-ARCHITECTURE_FIELDS = ("width", "layers", "heads", "context")
+ARCHITECTURE_FIELDS = ("width", "layers", "heads", "vocab_size", "context")
 
 
 @dataclass(frozen=True)
@@ -504,7 +504,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 def _self_check() -> None:
     row = {
-        "case": {"width": 768, "layers": 12, "heads": 12, "context": 128},
+        "case": {
+            "width": 768,
+            "layers": 12,
+            "heads": 12,
+            "vocab_size": 256,
+            "context": 128,
+        },
         "parent": {"features": {name: 1.0 for name in STATE_FIELDS}, "history": []},
         "action": {"kind": "noop", "strength": 1.0},
     }
