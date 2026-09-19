@@ -165,6 +165,41 @@ layer/gradient/curvature directions and a new costed probe; otherwise the
 next efficient hypothesis is data/work allocation rather than parameter
 transport.
 
+## Role-wise hindsight oracle screen
+
+Before closing role-wise transport, the full future-weight oracle was split
+into five mutually exclusive actions: copy only the embedding, attention,
+MLP, normalization, or output-head parameters from the recorded step-2048
+snapshot. All branches preserved the parent AdamW moments and advanced the
+data cursor by the declared 512-step exposure. This was still a hindsight
+oracle: the future weights were unavailable to a deployed action selector.
+
+The authoritative balanced screen used four roots: FineWeb-Edu 85M and 139M,
+and TinyStories 85M and 139M. It completed 20/20 branches after a harness fix
+that guarded the partial parameter copy with `torch.no_grad()`; the earlier
+20-branch run failed with an in-place autograd error and is excluded from the
+scientific results.
+
+| Transported role | Branches passing endpoint | Median immediate delta | Median recovery delta | Median final delta | Median wall ratio |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| embedding | 0/4 | `+0.02463` | `+0.05713` | `+0.04494` | `1.22x` |
+| attention | 0/4 | `-0.01477` | `+0.01897` | `+0.01659` | `1.22x` |
+| MLP | 0/4 | `-0.01105` | `+0.02875` | `+0.02063` | `1.22x` |
+| norm | 0/4 | `+0.02330` | `+0.05630` | `+0.04363` | `1.22x` |
+| head | 0/4 | `+0.02209` | `+0.05649` | `+0.04399` | `1.22x` |
+
+The action is therefore informative but not durable: attention and MLP are
+the only roles with a transient benefit, and both lose it before recovery.
+The role split does not reveal a cheap productive subset of the future state.
+Because the candidate has the same 512-step continuation after the copy, the
+actual speedup comes from declared skipped exposure rather than cheaper
+training; conservative charging remains `1.00x` for every role. This closes
+the role-wise future-weight copy as a promotion path. The next transport
+attempt, if any, must predict a causal action and its long-horizon response,
+including optimizer/data state, rather than copying a hindsight endpoint.
+
+Manifest: `runs/trajectory-transport-role-oracle-balanced-v2/manifest.json`.
+
 The generated manifests are intentionally ignored run artifacts:
 
 - `runs/trajectory-transport-oracle-fineweb85-seed3-5/manifest.json`

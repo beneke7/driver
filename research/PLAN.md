@@ -322,6 +322,25 @@ policy is closed. A richer basis must earn a new probe, otherwise move the
 next oracle screen to data/work allocation rather than increasing steerer
 capacity.
 
+The role-wise hindsight oracle screen is also closed. On four balanced roots
+(FineWeb-Edu 85M/139M and TinyStories 85M/139M), copying only one of
+`embedding`, `attention`, `mlp`, `norm`, or `head` from the recorded future
+checkpoint produced 0/20 durable endpoint passes. Attention and MLP copies
+had transient median improvements of `-0.01477` and `-0.01105`, but their
+recovery medians were `+0.01897` and `+0.02875`, and final medians were
+`+0.01659` and `+0.02063`. The other roles were worse immediately and at the
+endpoint. The wall ratio was about `1.22x` only because the candidate declared
+the 512-step exposure skipped; conservative cost was `1.00x` for every role.
+This is evidence for long-horizon action labels and state coupling, not a
+reason to scale a role-wise steerer. See
+[`TRAJECTORY_TRANSPORT_RESULTS.md`](TRAJECTORY_TRANSPORT_RESULTS.md).
+
+The next admissible rung is a cheap actionability/data-work oracle using real
+branches and explicit cost, or a causal transport probe that predicts both
+parameter and optimizer-state changes. Do not add planner, dreaming, PPO/SAC,
+or a larger pretrained controller until one of those baselines demonstrates
+held-out durable action ranking within support.
+
 ### Passive trajectory corpus and phase model (2026-09-19)
 
 The first normalized passive corpus now contains 17 complete local AdamW roots
