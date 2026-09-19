@@ -500,6 +500,16 @@ selected shadow on all three splits, and its RMSE was no better than the
 action-only prior. The history path is now ready for a larger archive, but it
 has not earned online adaptation or a deeper policy yet.
 
+The first reusable implementation is
+[`driver/trajectory_action_selector.py`](../driver/trajectory_action_selector.py).
+On seeds 12–13 train / seed-14 holdout, its 128-wide history MLP was badly
+out of support (test RMSE `0.860` and predicted shadow delta `+0.839` for true
+loss deltas near `-0.03`). The leave-one-root support gate detected this
+(`test_support_rate=0`) and abstained to noop. The action-only prior would have
+selected shadow and gained `0.03592`, but it is not a state-dependent driver.
+This is the intended safety failure: collect more roots before increasing
+model capacity or enabling online updates.
+
 The current timing policy is therefore architecture-conditioned but still
 fixed: the 85M holdouts use global step `2176`, while three exact 139M seeds
 use `2048`. This is a useful explicit input for the future driver and gives
