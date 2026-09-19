@@ -175,6 +175,7 @@ def _run_case(
     source_transition = _source_transition(manifest_path, case["case_id"])
     started = time.perf_counter()
     parent: dict[str, torch.Tensor] | None = None
+    basis_states: tuple[dict[str, torch.Tensor], ...] = ()
     basis_vectors: tuple[dict[str, torch.Tensor], ...] = ()
     future: dict[str, torch.Tensor] | None = None
     projected: dict[str, torch.Tensor] | None = None
@@ -210,6 +211,12 @@ def _run_case(
         projection_seconds = time.perf_counter() - started
         parameter_count = sum(value.numel() for value in parent.values())
         projection_flops = 6.0 * len(basis_steps) * parameter_count
+        # Release multi-gigabyte CPU state before instantiating the matched GPU
+        # branch; keeping it live would make rank-3 a memory experiment.
+        parent = None
+        basis_states = ()
+        basis_vectors = ()
+        future = None
         with tempfile.TemporaryDirectory(prefix="trajectory-low-rank-") as temporary:
             projected_path = Path(temporary) / "projected.pt"
             _write_snapshot(
@@ -219,6 +226,8 @@ def _run_case(
                 data_sha=data_sha,
                 step=future_step,
             )
+            projected = None
+            gc.collect()
             result = _run_variant(
                 parent=parent_path,
                 future=projected_path,
@@ -289,7 +298,7 @@ def _run_case(
             "oracle_only": True,
         }
     finally:
-        del parent, basis_vectors, future, projected
+        del parent, basis_states, basis_vectors, future, projected
         gc.collect()
         if device.type == "cuda":
             torch.cuda.empty_cache()
