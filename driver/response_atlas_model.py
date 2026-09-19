@@ -21,6 +21,7 @@ from .history_jump_selector import Predictor
 
 
 HORIZONS = ("immediate", "recovery", "final")
+FEATURE_SCALE_FLOOR = 0.1
 STATE_FIELDS = (
     "loss",
     "gradient_norm",
@@ -199,7 +200,10 @@ def _fit_ensemble(
     if hidden < 1 or epochs < 1 or ensemble < 1:
         raise ValueError("hidden, epochs, and ensemble must be positive")
     mean = train_values.mean(dim=0)
-    scale = train_values.std(dim=0, unbiased=False).clamp_min(1e-6)
+    # Deliberate ceiling: a scalar floor prevents near-identical training roots
+    # from turning a domain shift into an infinite-distance outlier; replace it
+    # with calibrated per-feature/group scales after the atlas spans more regimes.
+    scale = train_values.std(dim=0, unbiased=False).clamp_min(FEATURE_SCALE_FLOOR)
     target_mean = train_targets.mean()
     target_scale = train_targets.std(unbiased=False).clamp_min(1e-6)
     normalized_train = ((train_values - mean) / scale).to(device)
@@ -240,7 +244,7 @@ def _support_radius(
         raise ValueError("support calibration needs at least two training roots")
     train_states = _matrix(train_examples, "state")
     mean = train_states.mean(dim=0)
-    scale = train_states.std(dim=0, unbiased=False).clamp_min(1e-6)
+    scale = train_states.std(dim=0, unbiased=False).clamp_min(FEATURE_SCALE_FLOOR)
     normalized = (train_states - mean) / scale
     calibration: list[torch.Tensor] = []
     for root in roots:
@@ -444,6 +448,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "actions": list(actions),
         "horizons": list(HORIZONS),
         "history": args.history,
+        "feature_scale_floor": FEATURE_SCALE_FLOOR,
         "hidden": args.hidden,
         "ensemble": args.ensemble,
         "epochs": args.epochs,
@@ -486,6 +491,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "feature_scale": scale,
             "target_mean": target_mean,
             "target_scale": target_scale,
+            "feature_scale_floor": FEATURE_SCALE_FLOOR,
             "actions": actions,
             "horizons": HORIZONS,
             "history": args.history,

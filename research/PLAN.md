@@ -138,3 +138,14 @@ geometry, not evidence for a planner. The next rung is more controlled atlas
 coverage and representation diagnosis; do not add MPC, dreaming, or online
 RL until an action-conditioned model beats the action-only prior on held-out
 roots within support.
+
+The first representation diagnosis found that raw train-root standard
+deviations made near-identical FineWeb trajectories over-penalize a changed
+data regime. A fixed feature-scale floor of `0.1` reduced FineWeb-to-TinyStories
+final prediction RMSE from `0.157` to `0.114`, reduced the prediction/reality
+gap from `0.131` to `0.025`, and reduced held-out distances from roughly
+`452` to `28`. The calibrated support radius is still only `6.7`, so the
+policy continues to abstain. On the FineWeb-only holdout, final RMSE fell from
+`1.36` to `0.19`, but support remains `0` with only two training roots. This
+is a calibration improvement with a known ceiling, not permission to deploy a
+planner; more complete roots are required before changing the support gate.
