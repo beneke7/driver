@@ -571,3 +571,21 @@ jump family rather than exposing an accounting bug. See
 Do not tune this action or train a selector around it. The next work must
 change the causal action family or improve state/action observability before
 another skip experiment.
+
+### Upper-layer work allocation (2026-09-20)
+
+The first genuinely new work-allocation action is now closed. A fixed
+`depth_curriculum` ran only the first 6 of 12 blocks for 384 of the first 768
+continuation steps, then restored full depth. It kept tokens, cursor, parent
+AdamW state, and branch horizons matched. Across fresh FineWeb-Edu 85M seeds
+33--35 at parent steps 768, 1280, and 1792, all 18 branches completed, but
+the candidate was durably worse on all 9 roots. Mean final deltas were
+`+0.056448`, `+0.032213`, and `+0.023216`; the corresponding end-to-end
+geometric wall ratios were only `1.1277x`, `1.0928x`, and `1.0728x`, with
+FLOP ratios `1.1418x`, `1.1027x`, and `1.0805x` after charging the common
+prefix. See [`DEPTH_ALLOCATION_RESULTS.md`](DEPTH_ALLOCATION_RESULTS.md).
+
+This closes the fixed half-depth schedule and does not justify a selector.
+The work-allocation idea remains distinct from transport, but another depth
+schedule must change the state-handling hypothesis and be preregistered before
+any run; do not tune this action post hoc.

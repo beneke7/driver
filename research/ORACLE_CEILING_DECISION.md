@@ -24,6 +24,7 @@ controls; none is a contract-valid 10x deployment result.
 | Multi-horizon cost-aware gate | FineWeb 85M timing holdouts, 6 groups; changed calibration, 9 groups | Timing: 1/6 actions and 1/6 recovery violations; changed: 4/9 actions, 0/9 recovery violations, but final mean `-0.012733` vs prior `-0.019329` | Timing pooled geometric wall `1.0167x`; changed `1.0565x`; final gaps `0.000492` and `0.002221` | Safety filter only; close current selector rung |
 | AdamW momentum extrapolation | FineWeb 85M, seeds 27--29; 2 alphas | Small: 0/3 final wins at `-1e-3`; medium: 1/3 durable-safe final wins and one recovery failure | Equal tokens; about `0.04%` extra charged FLOPs and `0.2%` wall | Close standalone update-space probe |
 | One-gradient 32-step probe jump | FineWeb 85M, seeds 30--32; one real gradient plus 31-step extrapolation | 0/3 durable-safe; mean final delta `+0.020353`; immediate mean `+1.646684` | Physical `1.1852x` FLOP ratio; conservative `0.9948x` after skipped work | Close short-horizon skip family |
+| Upper-layer depth curriculum | FineWeb 85M, 3 timing points × seeds 33--35; 6/12 layers for 384 of 768 continuation steps | 0/9 durable-safe roots; final mean deltas `+0.056448`, `+0.032213`, `+0.023216` at parent 768/1280/1792 | End-to-end wall `1.1277x`, `1.0928x`, `1.0728x`; FLOPs `1.1418x`, `1.1027x`, `1.0805x`; equal tokens | Close fixed depth schedule |
 
 The shadow row is retained as a useful fixed baseline; its exact charged
 ratios and roster are in
@@ -90,6 +91,16 @@ risk accounting, not evidence for a deployable driver or for increased model
 capacity. Full values and commands are in
 [`MULTIHORIZON_GATE_RESULTS.md`](MULTIHORIZON_GATE_RESULTS.md).
 
+The new upper-layer work-allocation oracle also fails the local ceiling rule.
+At parent steps 768, 1280, and 1792, the same 6/12-for-384 schedule regressed
+on all three fresh seeds at every final endpoint. Its apparent branch-only
+compute reduction was real, but common-prefix accounting reduced the geometric
+FLOP advantage to `1.1418x`, `1.1027x`, and `1.0805x`, while end-to-end wall
+ratios were `1.1277x`, `1.0928x`, and `1.0728x`. This is a state/re-entry
+negative result, not evidence to scale a controller or fit a selector. Full
+paired manifests and measurements are in
+[`DEPTH_ALLOCATION_RESULTS.md`](DEPTH_ALLOCATION_RESULTS.md).
+
 Therefore:
 
 - do not train a larger steerer, pretrained meta-brain, planner, dreaming
@@ -143,3 +154,6 @@ been exhausted.
 - `runs/changed-calibration-model-seed9-v1/report.json`
 - `runs/changed-calibration-model-seed10-v1/report.json`
 - `runs/changed-calibration-model-seed11-v1/report.json`
+- `runs/depth-allocation-fineweb85-p768-s33-35-v1/manifest.json`
+- `runs/depth-allocation-fineweb85-p1280-s33-35-v1/manifest.json`
+- `runs/depth-allocation-fineweb85-p1792-s33-35-v1/manifest.json`
