@@ -408,6 +408,21 @@ new predeclared causal action family—task-aligned in-domain allocation or
 few-shot initialization/seed screening—and first clear the small oracle
 ceiling rule in the decision document.
 
+### Disjoint trajectory-anchor initialization screen (2026-09-19)
+
+The first implementation of this idea was rejected before use because nearby
+seed rotations reused target bytes inside the source prefix. The corrected
+screen gives the target noop and source-initialized anchor the same byte
+interval outside the source prefix, charges source-prefix and deployment
+costs, and records target-RNG, source-RNG, and zero-moment controls. Six
+preserve-state pairs completed without failures, but only 2/6 anchors beat
+the matched endpoint; the combined mean final delta was `+0.00023`, and the
+median single-deployment hard-threshold wall ratio was `1.05x`. The zero-
+moment and source-RNG seed-3 controls changed individual deltas without
+providing a reproducible advantage. This closes the current same-corpus
+anchor route as a driver promotion path. See
+[`TRAJECTORY_ANCHOR_RESULTS.md`](TRAJECTORY_ANCHOR_RESULTS.md).
+
 ### Passive trajectory corpus and phase model (2026-09-19)
 
 The first normalized passive corpus now contains 17 complete local AdamW roots

@@ -13,6 +13,7 @@ controls; none is a contract-valid 10x deployment result.
 | Learned one-basis role transport | FineWeb-to-Tiny and leave-one-root-out | 0/3 and 0/1 endpoint passes | Equal-token branches; no durable gain | Close single-basis policy |
 | Complete future checkpoint | 4 balanced roots | Resume loss within `0.000891` of direct continuation; strict bitwise-style check 0/4 | Ideal `1.286x`, conservative `1.000145x` | State consistency only |
 | Complete cross-corpus switch | 4 balanced roots | 0/4; median final delta `+0.63117` | Equal tokens and exact `1.00x` cost | Close coarse data switch |
+| Disjoint trajectory-anchor initialization | 85M FineWeb-Edu/TinyStories, 6 preserve pairs | 2/6 endpoint wins; combined mean final delta `+0.00023` | Median hard-threshold wall ratio `1.05x` at one deployment; source checkpoint-write time unavailable | Close current same-corpus anchor screen |
 | Fixed shadow stop | 85M/139M and two data sources | Durable mechanism at tested roots | About `1.13x` wall / `1.08x` charged FLOP speedup in prior report | Baseline only, not driver |
 | Action-conditioned atlas ensemble | Phase-switch seeds 13--14 | Support 2/2, final top-1 `0/2`, safe noop both | Final prediction/reality gap `0.0101` | Gate closed |
 
@@ -27,7 +28,10 @@ The current action space does not contain evidence for a cheap transferable
 10x mechanism. A future state can be copied only with hindsight, partial
 state copies are not durable, complete state copies are cost-neutral once the
 state-creation work is charged, and a coarse data-domain switch is harmful.
-The safe action-conditioned model abstains when its final-horizon predictions
+The disjoint same-corpus anchor screen adds only mixed, near-neutral evidence:
+2/6 preserve-state endpoint wins with a combined mean final delta of `+0.00023`
+and a median hard-threshold wall ratio of `1.05x` for one deployment. The safe
+action-conditioned model abstains when its final-horizon predictions
 are not reliable, including states that were inside its geometric support.
 
 Therefore:
@@ -42,14 +46,13 @@ Therefore:
 ## Next-rung rule
 
 Continue only with a new, predeclared causal action family that has a common
-task objective and a plausible conservative ceiling: for example an
-in-domain data/work schedule or a few-shot initialization/seed-screening
-action. Run a small matched oracle first. If it does not show a durable
-improvement on at least two of three fresh roots and a conservative
-cost-to-threshold opportunity materially above the fixed-shadow baseline,
-close that family before adding model capacity. If it does show a ceiling,
-train the smallest action-conditioned model and evaluate complete held-out
-roots before any planner or RL.
+task objective and a plausible conservative ceiling, or with fresh disjoint
+data if revisiting initialization. The current anchor screen did not show a
+durable improvement on at least two of three roots within either data regime
+and did not materially exceed the fixed-shadow baseline. Close this
+same-corpus anchor family before adding model capacity. If a future action
+family does show a ceiling, train the smallest action-conditioned model and
+evaluate complete held-out roots before any planner or RL.
 
 This is a no-go for the current transport hypothesis as a 10x mechanism, not
 a claim that every possible initialization or task-aligned allocation has
@@ -63,4 +66,7 @@ been exhausted.
 - `runs/trajectory-transport-role-oracle-balanced-v2/manifest.json`
 - `runs/full-state-transport-sanity-balanced-v1/manifest.json`
 - `runs/data-allocation-oracle-balanced-v2/manifest.json`
+- `runs/trajectory-anchor-adaptation-85-balanced-v1/manifest.json`
+- `runs/trajectory-anchor-adaptation-85-zero-moments-seed3-v1/manifest.json`
+- `runs/trajectory-anchor-adaptation-85-source-rng-seed3-v1/manifest.json`
 - `runs/actionability-model-phase-switch-long-v1/report.json`
