@@ -546,7 +546,10 @@ loss deltas near `-0.03`). The leave-one-root support gate detected this
 (`test_support_rate=0`) and abstained to noop. The action-only prior would have
 selected shadow and gained `0.03592`, but it is not a state-dependent driver.
 This is the intended safety failure: collect more roots before increasing
-model capacity or enabling online updates.
+model capacity or enabling online updates. The selector now accepts an
+explicit fixed-action fallback: default noop abstains, while a promoted
+shadow fallback preserves the known `0.03592` seed-14 gain without treating
+the unsupported MLP prediction as trusted.
 
 The current timing policy is therefore architecture-conditioned but still
 fixed: the 85M holdouts use global step `2176`, while three exact 139M seeds

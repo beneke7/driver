@@ -180,6 +180,7 @@ def _selection_report(
     train_examples: list[Example],
     risk_radius: float,
     supported_groups: dict[tuple[str, int, int], bool],
+    fallback_action: str,
 ) -> dict[str, Any]:
     grouped: dict[tuple[str, int, int], list[tuple[Example, float]]] = defaultdict(list)
     for example, prediction in zip(test_examples, predictions.tolist()):
@@ -197,7 +198,16 @@ def _selection_report(
         predicted = min(candidates, key=lambda item: item[1] + risk_radius)
         predicted_score = predicted[1] + risk_radius
         supported = supported_groups.get(group, False)
-        chosen = predicted if supported and predicted_score < 0.0 else (None, 0.0)
+        fallback = next(
+            (item for item in candidates if item[0].action == fallback_action), None
+        )
+        chosen = (
+            predicted
+            if supported and predicted_score < 0.0
+            else fallback
+            if fallback is not None
+            else (None, 0.0)
+        )
         selected_value = chosen[0].target if chosen[0] is not None else 0.0
         prior_action = min(ACTIONS, key=lambda action: prior[action])
         prior_value = prior[prior_action] if prior[prior_action] < 0.0 else 0.0
@@ -290,8 +300,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "test_support_rate": float(
             sum(supported_groups.values()) / max(1, len(supported_groups))
         ),
+        "fallback_action": args.fallback_action,
         "metrics": _selection_report(
-            test, prediction, train, risk_radius, supported_groups
+            test,
+            prediction,
+            train,
+            risk_radius,
+            supported_groups,
+            args.fallback_action,
         ),
     }
     output = Path(args.output)
@@ -334,6 +350,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epochs", type=int, default=400)
     parser.add_argument("--risk-radius", type=float)
     parser.add_argument("--support-radius", type=float)
+    parser.add_argument("--fallback-action", choices=("noop", *ACTIONS), default="noop")
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--self-check", action="store_true")
