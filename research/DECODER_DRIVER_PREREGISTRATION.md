@@ -114,17 +114,25 @@ action-only prior on complete held-out roots with support calibration.
 ### Trajectory-anchor initialization track
 
 Knowledge transfer is evaluated separately from fixed-architecture optimizer
-control. A trajectory-anchor action initializes a fresh target run from a
-complete step-1536 checkpoint produced on a different seed in the same data
-and architecture regime, then consumes the target stream from cursor zero.
-The source checkpoint's model, AdamW state, RNG, and provenance are retained;
-the target data cursor and target data hash are explicit. Source and target
-seeds are paired before reading target outcomes.
+control. The primary anchor screen is a **disjoint-adaptation** experiment:
+it initializes a target branch from a complete step-1536 checkpoint produced
+on a different seed in the same data and architecture regime, then gives both
+the target noop control and the anchor the same predeclared byte interval for
+their continuation. The interval must be outside the source checkpoint's
+consumed prefix; its offset, length, hash, and cursor are recorded. This
+avoids treating nearby rotations of one byte file as independent fresh data.
 
-The target baseline is the recorded fresh-seed AdamW/no-op endpoint. The
-anchor is evaluated after 128, 512, and 768 target steps against the baseline
-final validation loss. Report the first horizon that reaches and stays at the
-baseline threshold, source-prefix creation cost, target continuation cost,
+The source checkpoint's model and AdamW state are retained, while the primary
+run uses the target RNG after the transfer. A source-RNG variant is a control.
+The target data cursor and target data hash are explicit. Source and target
+seeds are paired before reading target outcomes. A zero-moment control resets
+both AdamW moment tensors and the optimizer step clock; preserving source
+moments preserves the clock.
+
+The target noop control and anchor are evaluated at 128, 512, and 768 target
+steps against three fixed thresholds (`0.995`, `0.99`, `0.98` times the target
+parent validation loss). Report the first horizon that reaches and stays at
+each threshold, source-prefix creation cost, target continuation cost,
 checkpoint I/O, and ratios for fixed deployment counts `N = 1, 2, 4, 8, 16`:
 
 ```text
@@ -133,11 +141,11 @@ S_anchor(N) = C_target_noop / C_anchor(N)
 ```
 
 The source-prefix cost is never treated as free. A fixed cyclic seed pairing,
-normal continuation, source optimizer-state preservation, and a zero-moment
-state control are development controls. This track cannot claim optimization
-speedup for a single deployment; any positive result is a knowledge-transfer
-result and must survive fresh target seeds, a changed data regime, and the
-same amortization accounting.
+normal continuation, source optimizer-state preservation, target-RNG control,
+and a zero-moment state control are development controls. This track cannot
+claim optimization speedup for a single deployment; any positive result is a
+knowledge-transfer result and must survive fresh target seeds, a changed data
+regime, and the same amortization accounting.
 
 ## Capability and cost contract
 
