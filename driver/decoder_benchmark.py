@@ -195,16 +195,24 @@ class Block(nn.Module):
         indices = active_token_mask.reshape(-1).nonzero(as_tuple=False).flatten()
         flat_attended = attended.reshape(-1, self.width).index_select(0, indices)
         attention_delta = self.attention_out(flat_attended)
-        flat_delta = torch.zeros_like(values.reshape(-1, self.width))
+        flat_delta = torch.zeros(
+            values.reshape(-1, self.width).shape,
+            device=values.device,
+            dtype=attention_delta.dtype,
+        )
         flat_delta = flat_delta.index_copy(0, indices, attention_delta)
-        values = values + flat_delta.view_as(values)
+        values = values + flat_delta.view_as(values).to(dtype=values.dtype)
 
         normalized_mlp = self.ln_mlp(values).reshape(-1, self.width)
         active_mlp = normalized_mlp.index_select(0, indices)
         mlp_delta = self.mlp_out(F.gelu(self.mlp_in(active_mlp)))
-        flat_delta = torch.zeros_like(values.reshape(-1, self.width))
+        flat_delta = torch.zeros(
+            values.reshape(-1, self.width).shape,
+            device=values.device,
+            dtype=mlp_delta.dtype,
+        )
         flat_delta = flat_delta.index_copy(0, indices, mlp_delta)
-        return values + flat_delta.view_as(values)
+        return values + flat_delta.view_as(values).to(dtype=values.dtype)
 
 
 class DecoderLM(nn.Module):

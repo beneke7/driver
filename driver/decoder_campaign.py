@@ -1988,6 +1988,10 @@ def _self_check() -> None:
     assert model.blocks[1].qkv.weight.grad is None
     assert _parameter_count_for_layers(model, 1) < _parameter_count_for_layers(model, None)
     model.zero_grad(set_to_none=True)
+    with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+        token_loss = model(tokens, targets, token_drop_fraction=0.5, token_mask_start=1)
+    assert math.isfinite(float(token_loss.item()))
+    model.zero_grad(set_to_none=True)
     model(tokens, targets, token_drop_fraction=0.5, token_mask_start=1).backward()
     assert _estimated_token_drop_flops(model, 8, 0.5, 1, 2, 4) < _estimated_training_flops(
         model, 8, None
