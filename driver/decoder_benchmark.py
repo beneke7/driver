@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import random
 import subprocess
 import time
@@ -167,7 +168,17 @@ class Block(nn.Module):
         self.mlp_in = nn.Linear(width, 4 * width)
         self.mlp_out = nn.Linear(4 * width, width)
 
-    def forward(self, values: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        values: torch.Tensor,
+        *,
+        active_token_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        if active_token_mask is not None:
+            if active_token_mask.shape != values.shape[:2] or active_token_mask.dtype != torch.bool:
+                raise ValueError("active_token_mask must be a boolean batch/context mask")
+            if not bool(active_token_mask.any()):
+                raise ValueError("active_token_mask must keep at least one token")
         normalized = self.ln_attention(values)
         batch, context, _ = normalized.shape
         query, key, value = self.qkv(normalized).chunk(3, dim=-1)
@@ -176,9 +187,24 @@ class Block(nn.Module):
         value = value.view(batch, context, self.heads, self.head_dim).transpose(1, 2)
         attended = F.scaled_dot_product_attention(query, key, value, is_causal=True)
         attended = attended.transpose(1, 2).contiguous().view(batch, context, self.width)
-        values = values + self.attention_out(attended)
-        values = values + self.mlp_out(F.gelu(self.mlp_in(self.ln_mlp(values))))
-        return values
+        if active_token_mask is None:
+            values = values + self.attention_out(attended)
+            values = values + self.mlp_out(F.gelu(self.mlp_in(self.ln_mlp(values))))
+            return values
+
+        indices = active_token_mask.reshape(-1).nonzero(as_tuple=False).flatten()
+        flat_attended = attended.reshape(-1, self.width).index_select(0, indices)
+        attention_delta = self.attention_out(flat_attended)
+        flat_delta = torch.zeros_like(values.reshape(-1, self.width))
+        flat_delta = flat_delta.index_copy(0, indices, attention_delta)
+        values = values + flat_delta.view_as(values)
+
+        normalized_mlp = self.ln_mlp(values).reshape(-1, self.width)
+        active_mlp = normalized_mlp.index_select(0, indices)
+        mlp_delta = self.mlp_out(F.gelu(self.mlp_in(active_mlp)))
+        flat_delta = torch.zeros_like(values.reshape(-1, self.width))
+        flat_delta = flat_delta.index_copy(0, indices, mlp_delta)
+        return values + flat_delta.view_as(values)
 
 
 class DecoderLM(nn.Module):
@@ -198,6 +224,8 @@ class DecoderLM(nn.Module):
         targets: torch.Tensor,
         *,
         active_layers: int | None = None,
+        token_drop_fraction: float | None = None,
+        token_mask_start: int | None = None,
     ) -> torch.Tensor:
         if active_layers is not None:
             if type(active_layers) is not int or not 1 <= active_layers <= len(self.blocks):
@@ -205,9 +233,33 @@ class DecoderLM(nn.Module):
             blocks = self.blocks[:active_layers]
         else:
             blocks = self.blocks
+        if token_drop_fraction is not None:
+            if not math.isfinite(token_drop_fraction) or not 0.0 <= token_drop_fraction < 1.0:
+                raise ValueError("token_drop_fraction must be finite and in [0, 1)")
+            mask_start = len(blocks) // 2 if token_mask_start is None else token_mask_start
+            if not 1 <= mask_start < len(blocks):
+                raise ValueError("token_mask_start must be inside the active model depth")
+        else:
+            mask_start = None
+        active_token_mask: torch.Tensor | None = None
         values = self.token_embedding(tokens) + self.position_embedding[:, : tokens.shape[1]]
-        for block in blocks:
-            values = block(values)
+        for index, block in enumerate(blocks):
+            if token_drop_fraction is not None and index == mask_start - 1:
+                with torch.no_grad():
+                    score_logits = self.lm_head(self.final_norm(values))
+                    token_loss = F.cross_entropy(
+                        score_logits.reshape(-1, score_logits.shape[-1]),
+                        targets.reshape(-1),
+                        reduction="none",
+                    ).view(tokens.shape[0], tokens.shape[1])
+                    keep = max(
+                        1,
+                        math.ceil(tokens.shape[1] * (1.0 - token_drop_fraction)),
+                    )
+                    keep_indices = token_loss.topk(keep, dim=1).indices
+                    active_token_mask = torch.zeros_like(token_loss, dtype=torch.bool)
+                    active_token_mask.scatter_(1, keep_indices, True)
+            values = block(values, active_token_mask=active_token_mask)
         logits = self.lm_head(self.final_norm(values))
         return F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.reshape(-1))
 

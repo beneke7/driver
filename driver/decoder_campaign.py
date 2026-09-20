@@ -74,6 +74,7 @@ MOMENTUM_STRATEGIES = (
     "momentum_extrapolate_medium",
 )
 DEPTH_STRATEGIES = ("depth_curriculum",)
+TOKEN_STRATEGIES = ("token_drop_curriculum",)
 ALL_STRATEGIES = (
     STRATEGIES
     + TRAJECTORY_STRATEGIES
@@ -81,6 +82,7 @@ ALL_STRATEGIES = (
     + PULSE_STRATEGIES
     + MOMENTUM_STRATEGIES
     + DEPTH_STRATEGIES
+    + TOKEN_STRATEGIES
     + ("damping",)
 )
 QUALITY_FACTORS = (0.995, 0.99, 0.98)
@@ -124,6 +126,9 @@ class CampaignConfig:
     trajectory_alpha: float = 1.0
     depth_curriculum_layers: int = 6
     depth_curriculum_steps: int = 384
+    token_drop_fraction: float = 0.50
+    token_drop_start_layer: int = 6
+    token_drop_steps: int = 384
     controller_up: float = 1.05
     controller_down: float = 0.80
     online_up: float = 1.05
@@ -538,6 +543,7 @@ def _proposals(
         "momentum_extrapolate_small": "noop",
         "momentum_extrapolate_medium": "noop",
         "depth_curriculum": "depth_curriculum",
+        "token_drop_curriculum": "token_drop_curriculum",
         "damping": "damping",
     }
     shallow_score = (
@@ -651,6 +657,61 @@ def _estimated_training_flops(
     return 6.0 * _parameter_count_for_layers(model, active_layers) * tokens
 
 
+def _token_drop_fraction_for_step(
+    schedule: str, step: int, campaign: CampaignConfig, depth: int
+) -> float | None:
+    if schedule == "token_drop_curriculum" and step < campaign.token_drop_steps:
+        if not 0.0 < campaign.token_drop_fraction < 1.0:
+            raise ValueError("token_drop_fraction must be between zero and one")
+        if not 1 <= campaign.token_drop_start_layer < depth:
+            raise ValueError("token_drop_start_layer must be inside model depth")
+        return campaign.token_drop_fraction
+    return None
+
+
+def _token_drop_skipped_parameter_count(
+    model: DecoderLM, start_layer: int
+) -> int:
+    count = 0
+    for name, parameter in model.named_parameters():
+        if not name.startswith("blocks."):
+            continue
+        block_index = int(name.split(".", 2)[1])
+        if block_index < start_layer:
+            continue
+        if any(part in name for part in (".attention_out.", ".mlp_in.", ".mlp_out.")):
+            count += parameter.numel()
+    return count
+
+
+def _estimated_token_drop_flops(
+    model: DecoderLM,
+    tokens: int,
+    fraction: float | None,
+    start_layer: int,
+    batch_size: int,
+    context: int,
+) -> float:
+    full = _estimated_training_flops(model, tokens, None)
+    if fraction is None:
+        return full
+    kept = max(1, math.ceil(context * (1.0 - fraction)))
+    dropped_tokens = batch_size * (context - kept)
+    saved = 6.0 * _token_drop_skipped_parameter_count(model, start_layer) * dropped_tokens
+    return max(0.0, full - saved)
+
+
+def _token_drop_probe_flops(model: DecoderLM, tokens: int, fraction: float | None) -> float:
+    if fraction is None:
+        return 0.0
+    probe_parameters = sum(
+        parameter.numel()
+        for module in (model.final_norm, model.lm_head)
+        for parameter in module.parameters()
+    )
+    return 2.0 * probe_parameters * tokens
+
+
 def _train_step(
     model: DecoderLM,
     optimizer: torch.optim.Optimizer,
@@ -681,8 +742,17 @@ def _train_step(
     active_layers = _active_layers_for_step(
         schedule, step, campaign, len(model.blocks)
     )
+    token_drop_fraction = _token_drop_fraction_for_step(
+        schedule, step, campaign, len(model.blocks)
+    )
     with _autocast(campaign, device):
-        loss = model(tokens, targets, active_layers=active_layers)
+        loss = model(
+            tokens,
+            targets,
+            active_layers=active_layers,
+            token_drop_fraction=token_drop_fraction,
+            token_mask_start=campaign.token_drop_start_layer,
+        )
     loss.backward()
     telemetry = _telemetry(model, optimizer, loss)
     optimizer.step()
@@ -690,8 +760,18 @@ def _train_step(
     telemetry["global_lr_multiplier"] = global_multiplier
     telemetry["schedule"] = schedule
     telemetry["active_layers"] = len(model.blocks) if active_layers is None else active_layers
-    telemetry["estimated_flops"] = _estimated_training_flops(
-        model, target_config.batch_size * target_config.context, active_layers
+    target_tokens = target_config.batch_size * target_config.context
+    telemetry["token_drop_fraction"] = token_drop_fraction or 0.0
+    telemetry["estimated_flops"] = _estimated_token_drop_flops(
+        model,
+        target_tokens,
+        token_drop_fraction,
+        campaign.token_drop_start_layer,
+        target_config.batch_size,
+        target_config.context,
+    )
+    telemetry["probe_flops"] = _token_drop_probe_flops(
+        model, target_tokens, token_drop_fraction
     )
     return telemetry, target_config.batch_size * target_config.context
 
@@ -1230,6 +1310,7 @@ def _branch(
             phase_metrics[-1]["loss"] = final_loss
         target_tokens = consumed_tokens
         target_flops = sum(float(row["estimated_flops"]) for row in telemetry)
+        probe_flops = sum(float(row["probe_flops"]) for row in telemetry)
         parameter_count = sum(parameter.numel() for parameter in model.parameters())
         pulse_overhead_flops = (
             2.0 * parameter_count * campaign.immediate_steps
@@ -1255,7 +1336,7 @@ def _branch(
             tokens=before.tokens + target_tokens,
             loss=final_loss,
             quality=-final_loss,
-            compute_flops=target_flops + evaluation_flops + maneuver_flops,
+            compute_flops=target_flops + probe_flops + evaluation_flops + maneuver_flops,
             features={
                 "loss_slope": _loss_slope(telemetry),
                 "gradient_norm": telemetry[-1]["gradient_norm"],
@@ -1281,6 +1362,7 @@ def _branch(
             "momentum_extrapolate_small": 14.0,
             "momentum_extrapolate_medium": 15.0,
             "depth_curriculum": 16.0,
+            "token_drop_curriculum": 17.0,
         }
         action_parameters = {
             "predicted_gain": proposal.predicted_gain,
@@ -1312,11 +1394,20 @@ def _branch(
                     "full_layers": target_config.layers,
                 }
             )
+        if selected_schedule == "token_drop_curriculum":
+            action_parameters.update(
+                {
+                    "token_drop_fraction": campaign.token_drop_fraction,
+                    "token_drop_start_layer": campaign.token_drop_start_layer,
+                    "curriculum_steps": campaign.token_drop_steps,
+                    "full_layers": target_config.layers,
+                }
+            )
         cost_components = {
             "target_flops": target_flops - recovery_flops - pulse_overhead_flops,
             "driver_inference_flops": driver_inference_flops,
             "driver_update_flops": driver_update_flops,
-            "probe_flops": 0.0,
+            "probe_flops": probe_flops,
             "recovery_flops": recovery_flops,
             "evaluation_flops": evaluation_flops,
             "rejected_branch_flops": 0.0,
@@ -1328,6 +1419,7 @@ def _branch(
         expected_compute_flops = sum(cost_components.values())
         actual_compute_flops = (
             target_flops
+            + probe_flops
             + evaluation_flops
             + maneuver_flops
             + driver_inference_flops
@@ -1350,6 +1442,7 @@ def _branch(
             after=after,
             compute_flops=(
                 target_flops
+                + probe_flops
                 + evaluation_flops
                 + maneuver_flops
                 + driver_inference_flops
@@ -1387,7 +1480,7 @@ def _branch(
                 "driver_update_flops": driver_update_flops,
                 "maneuver_flops": maneuver_flops,
                 "action_overhead_flops": action_overhead_flops,
-                "probe_flops": 0.0,
+                "probe_flops": probe_flops,
                 "recovery_flops": recovery_flops,
                 "evaluation_flops": evaluation_flops,
                 "cost_components": cost_components,
@@ -1396,7 +1489,7 @@ def _branch(
                     "update_flops": driver_update_flops,
                     "maneuver_flops": maneuver_flops,
                     "action_overhead_flops": action_overhead_flops,
-                    "probe_flops": 0.0,
+                    "probe_flops": probe_flops,
                     "recovery_flops": recovery_flops,
                     "evaluation_flops": evaluation_flops,
                 },
@@ -1419,6 +1512,7 @@ def _branch(
             "maneuver": maneuver,
             "wall_seconds": wall_seconds,
             "target_flops": target_flops,
+            "probe_flops": probe_flops,
             "target_tokens": target_tokens,
             "phase_metrics": phase_metrics,
             "telemetry": telemetry,
@@ -1893,7 +1987,12 @@ def _self_check() -> None:
     model(tokens, targets, active_layers=1).backward()
     assert model.blocks[1].qkv.weight.grad is None
     assert _parameter_count_for_layers(model, 1) < _parameter_count_for_layers(model, None)
-    print("decoder campaign self-check: momentum state and depth curriculum")
+    model.zero_grad(set_to_none=True)
+    model(tokens, targets, token_drop_fraction=0.5, token_mask_start=1).backward()
+    assert _estimated_token_drop_flops(model, 8, 0.5, 1, 2, 4) < _estimated_training_flops(
+        model, 8, None
+    )
+    print("decoder campaign self-check: momentum state, depth, and token curriculum")
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -1934,6 +2033,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         trajectory_alpha=args.trajectory_alpha,
         depth_curriculum_layers=args.depth_curriculum_layers,
         depth_curriculum_steps=args.depth_curriculum_steps,
+        token_drop_fraction=args.token_drop_fraction,
+        token_drop_start_layer=args.token_drop_start_layer,
+        token_drop_steps=args.token_drop_steps,
         amp=not args.no_amp,
     )
     if campaign.width % campaign.heads:
@@ -1944,10 +2046,6 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("trajectory interval and window must be positive")
     if not math.isfinite(campaign.trajectory_alpha):
         raise ValueError("trajectory_alpha must be finite")
-    if not 1 <= campaign.depth_curriculum_layers < campaign.layers:
-        raise ValueError("depth_curriculum_layers must be between 1 and layers - 1")
-    if not 0 < campaign.depth_curriculum_steps < campaign.final_steps:
-        raise ValueError("depth_curriculum_steps must be between 1 and final_steps - 1")
     for name in (
         "pulse_attention",
         "pulse_mlp",
@@ -1972,6 +2070,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     strategies = tuple(args.strategy) if args.strategy else STRATEGIES
     if not strategies:
         raise ValueError("at least one strategy is required")
+    if "depth_curriculum" in strategies:
+        if not 1 <= campaign.depth_curriculum_layers < campaign.layers:
+            raise ValueError("depth_curriculum_layers must be between 1 and layers - 1")
+        if not 0 < campaign.depth_curriculum_steps < campaign.final_steps:
+            raise ValueError("depth_curriculum_steps must be between 1 and final_steps - 1")
+    if "token_drop_curriculum" in strategies:
+        if not 0.0 < campaign.token_drop_fraction < 1.0:
+            raise ValueError("token_drop_fraction must be between zero and one")
+        if not 1 <= campaign.token_drop_start_layer < campaign.layers:
+            raise ValueError("token_drop_start_layer must be between 1 and layers - 1")
+        if not 0 < campaign.token_drop_steps < campaign.final_steps:
+            raise ValueError("token_drop_steps must be between 1 and final_steps - 1")
     if not landscapes or not seeds:
         raise ValueError("at least one landscape and seed are required")
     if any(item not in LANDSCAPES for item in landscapes):
@@ -2216,6 +2326,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--depth-curriculum-steps",
         type=int,
         default=CampaignConfig.depth_curriculum_steps,
+    )
+    parser.add_argument(
+        "--token-drop-fraction",
+        type=float,
+        default=CampaignConfig.token_drop_fraction,
+    )
+    parser.add_argument(
+        "--token-drop-start-layer",
+        type=int,
+        default=CampaignConfig.token_drop_start_layer,
+    )
+    parser.add_argument(
+        "--token-drop-steps",
+        type=int,
+        default=CampaignConfig.token_drop_steps,
     )
     parser.add_argument("--no-amp", action="store_true")
     parser.add_argument("--allow-small-target", action="store_true")
