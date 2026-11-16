@@ -9,6 +9,11 @@ curvature driver passes a preregistered 10× gate on five synthetic positive-
 definite landscape families. That result is deliberately scoped; it is not a
 claim about language-model pretraining.
 
+Storage note (2026-09-29): the 1,285 `.pt` checkpoint/model files under
+`runs/` were removed to reclaim 623.65 GiB. Run manifests, telemetry, reports,
+and research summaries remain; the saved model weights and full training
+checkpoints do not.
+
 ## First question
 
 From identical checkpoints, can a state-dependent structured correction beat a

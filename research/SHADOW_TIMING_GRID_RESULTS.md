@@ -55,11 +55,14 @@ therefore demonstrates a promising timing-conditioned final response, not a
 deployable multi-horizon policy. Add a conservative all-horizon risk gate or
 collect more late-state responses before deployment.
 
-The exact model artifacts are:
+The retained model reports are:
 
-- `runs/shadow-timing-grid-model-seed24-v1/report.json` and `world_model.pt`;
-- `runs/shadow-timing-grid-model-seed25-v1/report.json` and `world_model.pt`;
-- `runs/shadow-timing-grid-model-seed26-v1/report.json` and `world_model.pt`.
+- `runs/shadow-timing-grid-model-seed24-v1/report.json`;
+- `runs/shadow-timing-grid-model-seed25-v1/report.json`;
+- `runs/shadow-timing-grid-model-seed26-v1/report.json`.
+
+The three `world_model.pt` files were removed in the 2026-09-29 storage
+cleanup; the reports and atlas remain.
 
 ## Changed-regime transfer
 
@@ -72,9 +75,9 @@ prediction/reality gap was `0.00431`, while the hindsight oracle mean delta was
 `-0.01942`. The safe abstention is correct behavior, but the action geometry
 does not transfer yet.
 
-Artifact: `runs/shadow-timing-transfer-model-v1/report.json` and
-`world_model.pt`; the combined 18-group atlas is
-`runs/shadow-timing-transfer-atlas-v1/atlas.jsonl`.
+Artifact: `runs/shadow-timing-transfer-model-v1/report.json`; its
+`world_model.pt` was removed in the 2026-09-29 storage cleanup. The combined
+18-group atlas is `runs/shadow-timing-transfer-atlas-v1/atlas.jsonl`.
 
 ## Decision
 

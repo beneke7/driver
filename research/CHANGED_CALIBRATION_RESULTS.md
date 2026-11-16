@@ -14,9 +14,12 @@ six groups. The model and split were frozen in
 Artifacts:
 
 - `runs/changed-calibration-atlas-v1/atlas.jsonl`;
-- `runs/changed-calibration-model-seed9-v1/report.json` and `world_model.pt`;
-- `runs/changed-calibration-model-seed10-v1/report.json` and `world_model.pt`;
-- `runs/changed-calibration-model-seed11-v1/report.json` and `world_model.pt`.
+- `runs/changed-calibration-model-seed9-v1/report.json`;
+- `runs/changed-calibration-model-seed10-v1/report.json`;
+- `runs/changed-calibration-model-seed11-v1/report.json`.
+
+The three `world_model.pt` files were removed in the 2026-09-29 storage
+cleanup; the reports and atlas remain.
 
 ## Results
 

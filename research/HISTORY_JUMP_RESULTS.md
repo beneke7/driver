@@ -12,6 +12,9 @@ artifacts are:
 runs/history-jump-traces-{delayed,phase,text}/
 ```
 
+The checkpoint `.pt` payloads in those directories were removed in the
+2026-09-29 storage cleanup; their manifests and per-step trace JSONL remain.
+
 The branch screen then ran serially per landscape to keep wall-time comparisons
 interpretable. It evaluated two parents per seed, horizons 8/16/32, `noop`, and
 momentum jumps with blend `0.5` or `1.0`: 108 branches, zero failures.

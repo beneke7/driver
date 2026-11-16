@@ -80,6 +80,10 @@ clear a small matched oracle ceiling before another selector is trained.
 
 ## Reproduction
 
+The historical command references a `world_model.pt` removed in the
+2026-09-29 storage cleanup. Recreate the model from the retained atlas before
+rerunning this gate.
+
 ```bash
 uv run python -m driver.multihorizon_gate --self-check
 

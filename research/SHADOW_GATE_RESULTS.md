@@ -19,8 +19,9 @@ The complete machine-readable artifacts are:
   aggregate statistics;
 - `runs/shadow-gate-atlas-v1/atlas.jsonl` — 24 causal action rows in 12
   matched parent groups;
-- each input run's `manifest.json` and `transitions.jsonl` — full checkpoint,
-  RNG/data/config, code, and cost provenance;
+- each input run's `manifest.json` and `transitions.jsonl` — checkpoint hash,
+  RNG/data/config, code, and cost provenance. The checkpoint weight payloads
+  were removed in the 2026-09-29 storage cleanup;
 - `runs/shadow-gate-model-fineweb139-v1/` — the smallest existing numerical
   response-model diagnostic and its held-out report.
 
